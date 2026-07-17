@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Sprout, Eye, EyeOff, Lock, User, Building2 } from "lucide-react";
 import { useAuth } from "../store/AuthContext";
+import { getToken } from "../lib/api";
 
 const ROLES = [
   { label: "Intern", desc: "Buat PR saja" },
@@ -23,8 +24,9 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Already logged in → go home.
-  useEffect(() => { if (user) navigate("/", { replace: true }); }, [user, navigate]);
+  // Already logged in → go home. Require a token too, so a stale persisted user
+  // (without a valid token) never bounces back to the dashboard.
+  useEffect(() => { if (user && getToken()) navigate("/", { replace: true }); }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

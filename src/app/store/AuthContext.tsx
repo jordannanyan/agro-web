@@ -34,7 +34,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let alive = true;
     async function init() {
-      if (!getToken()) { setLoading(false); return; }
+      if (!getToken()) {
+        // No token → any persisted user is stale. Clearing it prevents a
+        // login↔dashboard redirect loop (Login sends a truthy user to "/",
+        // dashboard has no token → 401 → back to /login → repeat).
+        localStorage.removeItem(USER_KEY);
+        if (alive) { setUser(null); setLoading(false); }
+        return;
+      }
       try {
         const res = await api.getRaw<{ user: any }>("me");
         // /me returns { user: { id, type, role, data } } — normalize to AuthUser

@@ -42,8 +42,10 @@ async function handle(res: Response): Promise<any> {
   try { json = text ? JSON.parse(text) : null; } catch { json = text; }
   if (!res.ok) {
     if (res.status === 401) {
-      // token invalid/expired → force re-login
+      // token invalid/expired → force re-login. Clear BOTH token and the
+      // persisted user, otherwise a stale user bounces /login → dashboard → 401.
       setToken(null);
+      localStorage.removeItem("agro_user");
       if (!location.pathname.startsWith("/login")) location.href = "/login";
     }
     const msg = (json && (json.message || json.error)) || `HTTP ${res.status}`;
