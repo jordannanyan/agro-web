@@ -7,9 +7,10 @@
 //  - Head     : + Payment Request, Warehouse, Pre-Finance.
 //  - Finance  : semua (termasuk Finance, Profit Sharing, Settings).
 //  - Director : semua.
+//  - Admin    : akses penuh ke semua halaman (termasuk manajemen pengguna).
 
-export type Role = "Intern" | "PM" | "Head" | "Finance" | "Director";
-export const ALL_ROLES: Role[] = ["Intern", "PM", "Head", "Finance", "Director"];
+export type Role = "Intern" | "PM" | "Head" | "Finance" | "Director" | "Admin";
+export const ALL_ROLES: Role[] = ["Intern", "PM", "Head", "Finance", "Director", "Admin"];
 
 // Path prefix → allowed roles. Evaluated top-to-bottom; first match wins.
 // List more specific prefixes before general ones.
@@ -42,6 +43,7 @@ function matches(path: string, prefix: string): boolean {
 /** Can this role open this route? Dashboard ("/") is open to everyone logged in. */
 export function canAccessPath(role: string | null | undefined, path: string): boolean {
   if (!role) return false;
+  if (role === "Admin") return true; // full access to everything
   if (path === "/") return true;
   for (const r of RULES) {
     if (matches(path, r.prefix)) return r.roles.includes(role as Role);
@@ -52,6 +54,6 @@ export function canAccessPath(role: string | null | undefined, path: string): bo
 /** Can this role act on an approval step assigned to `stepRole`? Director may act on any step. */
 export function canApprove(role: string | null | undefined, stepRole: string | null | undefined): boolean {
   if (!role) return false;
-  if (role === "Director") return true;
+  if (role === "Director" || role === "Admin") return true;
   return !!stepRole && role === stepRole;
 }

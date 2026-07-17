@@ -9,7 +9,7 @@ interface PlotMap {
   id: number; plot_name: string; scheme: string; farmer_id: number; farmer_name: string;
   kth_id: number | null; entities_id: number | null;
   polygon: { id: number; latitude: number; longitude: number; seq: number }[];
-  trees: { id: number; tree_code: string | null; latitude: number; longitude: number }[];
+  trees: { id: number; tree_name: string | null; latitude: number; longitude: number }[];
 }
 
 const SCHEME_COLOR: Record<string, string> = { BeliPutus: "#3b82f6", PreFinance: "#f59e0b", ProfitSharing: "#10b981" };
@@ -91,7 +91,7 @@ export default function MapMonitoring() {
                     )}
                     {(p.trees || []).filter((t) => t.latitude != null && t.longitude != null).map((t) => (
                       <CircleMarker key={t.id} center={[Number(t.latitude), Number(t.longitude)]} radius={4} pathOptions={{ color, fillColor: color, fillOpacity: 0.9, weight: 1 }}>
-                        <Popup><b>{t.tree_code || "Pohon"}</b><br />{p.plot_name} · {p.farmer_name}</Popup>
+                        <Popup><b>{t.tree_name || "Pohon"}</b><br />{p.plot_name} · {p.farmer_name}</Popup>
                       </CircleMarker>
                     ))}
                     {poly.length > 0 && poly.length < 3 && (

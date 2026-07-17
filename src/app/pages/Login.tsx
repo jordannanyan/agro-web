@@ -13,14 +13,6 @@ const ROLES = [
 
 const ENTITIES = ["PT. SNBS", "PT. JNBS"];
 
-const DEMO_ACCOUNTS = [
-  { username: "intern01", role: "Intern", entity: "PT. SNBS" },
-  { username: "pm01", role: "PM (Project Manager)", entity: "PT. SNBS" },
-  { username: "head01", role: "Head / Manager", entity: "PT. JNBS" },
-  { username: "finance01", role: "Finance", entity: "PT. SNBS" },
-  { username: "director01", role: "Director", entity: "PT. SNBS" },
-];
-
 export default function Login() {
   const navigate = useNavigate();
   const { login, user } = useAuth();
@@ -50,13 +42,6 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fillDemo = (acc: typeof DEMO_ACCOUNTS[0]) => {
-    setUsername(acc.username);
-    setPassword("password");
-    setEntity(acc.entity);
-    setError("");
   };
 
   return (
@@ -206,28 +191,6 @@ export default function Login() {
               {loading ? "Memproses..." : "Masuk"}
             </button>
           </form>
-
-          {/* Demo Accounts */}
-          <div className="mt-8">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
-              Akun Demo — klik untuk mengisi otomatis
-            </p>
-            <div className="space-y-2">
-              {DEMO_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.username}
-                  onClick={() => fillDemo(acc)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-emerald-200 transition-colors group text-left"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800 group-hover:text-emerald-700">{acc.username}</p>
-                    <p className="text-xs text-slate-400">{acc.role}</p>
-                  </div>
-                  <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded font-mono">{acc.entity}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>
