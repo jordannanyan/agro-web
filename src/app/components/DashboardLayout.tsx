@@ -19,8 +19,10 @@ import {
   Building2,
   LogOut,
   TrendingUp,
+  Lock,
 } from "lucide-react";
 import { useAuth, initials } from "../store/AuthContext";
+import { canAccessPath } from "../lib/permissions";
 
 const menuItems = [
   { id: "dashboard", icon: LayoutDashboard, label: "Dashboard", path: "/" },
@@ -116,6 +118,22 @@ export default function DashboardLayout() {
     entity: user.entity?.entities_name || (user.entity_id ? `Entity #${user.entity_id}` : "Lintas Entitas"),
   };
 
+  const role = user.role;
+
+  // Filter the sidebar to what this role may access.
+  const visibleMenu = menuItems
+    .map((item) => {
+      if ("subItems" in item && item.subItems) {
+        const subItems = item.subItems.filter((s) => canAccessPath(role, s.path));
+        return subItems.length ? { ...item, subItems } : null;
+      }
+      return canAccessPath(role, (item as any).path || "#") ? item : null;
+    })
+    .filter(Boolean) as typeof menuItems;
+
+  // Block direct-URL access to routes this role isn't allowed to open.
+  const routeAllowed = canAccessPath(role, location.pathname);
+
   return (
     <div className="flex h-screen bg-[#FAFBFC]">
       {/* Sidebar */}
@@ -136,7 +154,7 @@ export default function DashboardLayout() {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-6 overflow-y-auto">
           <ul className="space-y-1">
-            {menuItems.map((item) => {
+            {visibleMenu.map((item) => {
               const Icon = item.icon;
               const isActive = item.path && location.pathname === item.path;
               const hasSubItems = "subItems" in item && item.subItems;
@@ -288,7 +306,22 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto px-8 py-8 bg-[#FAFBFC]">
-          <Outlet />
+          {routeAllowed ? (
+            <Outlet />
+          ) : (
+            <div className="max-w-md mx-auto mt-20 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
+                <Lock className="w-7 h-7 text-red-500" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-1">Akses Ditolak</h2>
+              <p className="text-sm text-slate-500 mb-6">
+                Role <span className="font-semibold text-slate-700">{SESSION.role}</span> tidak memiliki akses ke halaman ini.
+              </p>
+              <button onClick={() => navigate("/")} className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold rounded-xl transition-colors">
+                Kembali ke Dashboard
+              </button>
+            </div>
+          )}
         </main>
       </div>
     </div>

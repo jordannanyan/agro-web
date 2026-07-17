@@ -3,6 +3,8 @@ import { Check, X, RotateCcw, Clock, CircleCheck, CircleX } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { Button } from "./ui/button";
+import { useAuth } from "../store/AuthContext";
+import { canApprove } from "../lib/permissions";
 
 export interface ApprovalStep {
   id: number;
@@ -30,6 +32,7 @@ export function ApprovalTimeline({
   steps: ApprovalStep[];
   onChanged: () => void;
 }) {
+  const { user } = useAuth();
   const [busy, setBusy] = useState<number | null>(null);
   const [noteFor, setNoteFor] = useState<number | null>(null);
   const [note, setNote] = useState("");
@@ -73,7 +76,7 @@ export function ApprovalTimeline({
             </div>
             {s.note && <p className="text-xs text-slate-500 mt-2 pl-11">“{s.note}”</p>}
 
-            {isActive && (
+            {isActive && canApprove(user?.role, s.role_name) && (
               <div className="mt-3 pl-11 space-y-2">
                 {noteFor === s.id && (
                   <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Catatan (opsional)…"
@@ -93,6 +96,9 @@ export function ApprovalTimeline({
                   </Button>
                 </div>
               </div>
+            )}
+            {isActive && !canApprove(user?.role, s.role_name) && (
+              <p className="mt-2 pl-11 text-xs text-slate-400">Menunggu tindakan <span className="font-medium text-slate-500">{s.role_name}</span>.</p>
             )}
           </div>
         );
