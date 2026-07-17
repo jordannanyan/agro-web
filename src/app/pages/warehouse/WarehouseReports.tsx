@@ -12,7 +12,7 @@ function InventoryReport() {
     <Card className="p-0">
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Gudang", "Saprodi", "Masuk", "Keluar", "Sisa"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}</tr></thead>
+          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Gudang", "Saprodi", "Masuk", "Keluar", "Sisa"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Sisa"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
           <tbody>
             {(data || []).map((r) => (
               <tr key={`${r.warehouse_id}-${r.sapropdi_id}`} className="border-b border-slate-50">
@@ -65,7 +65,7 @@ function DistributionReport() {
     <Card className="p-0">
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Tanggal", "Petani", "Saprodi", "Qty", "Nilai", "Kirim"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}</tr></thead>
+          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Tanggal", "Petani", "Saprodi", "Qty", "Nilai", "Kirim"].map((h) => <th key={h} className={`${["Qty", "Nilai"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
           <tbody>
             {saprodiOnly.map((r) => (
               <tr key={r.id} className="border-b border-slate-50">

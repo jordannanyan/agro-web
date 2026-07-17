@@ -122,7 +122,7 @@ export default function Selling() {
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
               {["Tanggal", "Batch", "Komoditas", "Offtaker", "Kirim", "Diterima", "Ditolak", "Harga/Kg", "Revenue", ""].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                <th key={h} className={`${["Kirim", "Diterima", "Ditolak", "Harga/Kg", "Revenue"].includes(h) ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
               ))}
             </tr></thead>
             <tbody>

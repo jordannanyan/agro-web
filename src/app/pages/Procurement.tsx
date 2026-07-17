@@ -82,7 +82,9 @@ export default function Procurement() {
     catch (e: any) { toast.error(e?.message || "Gagal menghapus"); }
   }
 
-  const thCls = "text-left py-3 px-6 text-xs font-semibold text-slate-600 uppercase tracking-wide";
+  const thBase = "py-3 px-6 text-xs font-semibold text-slate-600 uppercase tracking-wide";
+  const thL = `${thBase} text-left`;
+  const thR = `${thBase} text-right`;
 
   return (
     <div className="space-y-6 pb-8">
@@ -127,8 +129,8 @@ export default function Procurement() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
-                  <th className={thCls}>PR Number</th><th className={thCls}>Entitas</th><th className={thCls}>Request Date</th><th className={thCls}>Required Date</th>
-                  <th className={`${thCls} text-right`}>Total Amount</th><th className={thCls}>Status</th><th className={thCls}>Requester</th><th className={`${thCls} text-right`}>Actions</th>
+                  <th className={thL}>PR Number</th><th className={thL}>Entitas</th><th className={thL}>Request Date</th><th className={thL}>Required Date</th>
+                  <th className={thR}>Total Amount</th><th className={thL}>Status</th><th className={thL}>Requester</th><th className={thR}>Actions</th>
                 </tr></thead>
                 <tbody>
                   {prList.filter((pr) => searchQuery === "" || pr.pr_number.toLowerCase().includes(searchQuery.toLowerCase())).map((pr) => (
@@ -162,7 +164,7 @@ export default function Procurement() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
-                  <th className={thCls}>PO Number</th><th className={thCls}>Related PR</th><th className={thCls}>Vendor</th><th className={thCls}>Order Date</th><th className={thCls}>Status</th><th className={`${thCls} text-right`}>Actions</th>
+                  <th className={thL}>PO Number</th><th className={thL}>Related PR</th><th className={thL}>Vendor</th><th className={thL}>Order Date</th><th className={thL}>Status</th><th className={thR}>Actions</th>
                 </tr></thead>
                 <tbody>
                   {poList.map((po) => (
@@ -193,8 +195,8 @@ export default function Procurement() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
-                  <th className={thCls}>PayReq Number</th><th className={thCls}>Sumber</th><th className={thCls}>Related Doc</th>
-                  <th className={`${thCls} text-right`}>Amount</th><th className={thCls}>Est. Bayar</th><th className={thCls}>Status</th><th className={`${thCls} text-right`}>Actions</th>
+                  <th className={thL}>PayReq Number</th><th className={thL}>Sumber</th><th className={thL}>Related Doc</th>
+                  <th className={thR}>Amount</th><th className={thL}>Est. Bayar</th><th className={thL}>Status</th><th className={thR}>Actions</th>
                 </tr></thead>
                 <tbody>
                   {payList.map((pay) => (

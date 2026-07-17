@@ -14,7 +14,7 @@ function ActualTab() {
       <div className="p-5 border-b border-slate-100"><h3 className="text-slate-800 font-semibold">Realisasi (Actual)</h3><p className="text-xs text-slate-400">Realisasi dari Purchase Order per entitas/periode/budget code</p></div>
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Entitas", "Periode", "Budget Code", "Actual"].map((h) => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}</tr></thead>
+          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Entitas", "Periode", "Budget Code", "Actual"].map((h) => <th key={h} className={`${h === "Actual" ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
           <tbody>
             {(data || []).map((r, i) => (
               <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
@@ -40,7 +40,7 @@ function MonitoringTab() {
       <div className="p-5 border-b border-slate-100"><h3 className="text-slate-800 font-semibold">Budget Monitoring</h3><p className="text-xs text-slate-400">Anggaran vs realisasi + variance</p></div>
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Entitas", "Periode", "Budget Code", "Sub", "Budget", "Actual", "Variance", "Terpakai"].map((h) => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}</tr></thead>
+          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Entitas", "Periode", "Budget Code", "Sub", "Budget", "Actual", "Variance", "Terpakai"].map((h) => <th key={h} className={`${["Budget", "Actual", "Variance"].includes(h) ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
           <tbody>
             {(data || []).map((r) => {
               const usedPct = Number(r.used_pct || 0);

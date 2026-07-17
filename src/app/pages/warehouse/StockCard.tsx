@@ -49,7 +49,7 @@ export default function StockCard() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
-              {["Tanggal", "Tipe", "Referensi", "Masuk", "Keluar", "Saldo"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}
+              {["Tanggal", "Tipe", "Referensi", "Masuk", "Keluar", "Saldo"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Saldo"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
             </tr></thead>
             <tbody>
               {(card || []).map((r, i) => (

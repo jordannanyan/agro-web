@@ -166,7 +166,7 @@ export default function Processing() {
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
               {["Kode", "Tanggal", "Komoditas", "Gudang", "Vol Input", "Vol Output", "Loss", "Biaya", "Status", ""].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                <th key={h} className={`${["Vol Input", "Vol Output", "Loss", "Biaya"].includes(h) ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
               ))}
             </tr></thead>
             <tbody>

@@ -102,7 +102,7 @@ export default function OutstandingFarmer() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 {["Petani", "Total Distribusi", "Total Terbayar", "Outstanding", "Progress Bayar", "Status"].map((h) => (
-                  <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={h} className={`${["Total Distribusi", "Total Terbayar", "Outstanding"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
                 ))}
               </tr>
             </thead>

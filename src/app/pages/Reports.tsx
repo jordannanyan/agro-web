@@ -29,7 +29,7 @@ function ProcurementReport() {
       <Card className="p-0">
         <div className="p-5 border-b border-slate-100"><h3 className="text-slate-800 font-semibold">Purchase Requests</h3></div>
         <div className="overflow-x-auto"><table className="w-full">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Nomor", "Entitas", "Tanggal", "Total", "Status"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}</tr></thead>
+          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Nomor", "Entitas", "Tanggal", "Total", "Status"].map((h) => <th key={h} className={`${h === "Total" ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
           <tbody>{prList.slice(0, 20).map((r) => (
             <tr key={r.id} className="border-b border-slate-50"><td className="py-3 px-5 text-sm font-mono text-blue-700">{r.pr_number}</td><td className="py-3 px-5 text-sm text-slate-600">{r.entity_name}</td><td className="py-3 px-5 text-sm text-slate-600">{r.request_date}</td><td className="py-3 px-5 text-right text-sm font-mono text-slate-900">{fmtRp(r.grand_total)}</td><td className="py-3 px-5"><Badge className={`border ${statusBadge(r.status)}`}>{r.status}</Badge></td></tr>
           ))}</tbody>
@@ -52,7 +52,7 @@ function PaymentReport() {
       </div>
       <Card className="p-0">
         <div className="overflow-x-auto"><table className="w-full">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Nomor", "Sumber", "Nominal", "Est. Bayar", "Status"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}</tr></thead>
+          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Nomor", "Sumber", "Nominal", "Est. Bayar", "Status"].map((h) => <th key={h} className={`${h === "Nominal" ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
           <tbody>{list.slice(0, 20).map((r) => (
             <tr key={r.id} className="border-b border-slate-50"><td className="py-3 px-5 text-sm font-mono text-amber-700">{r.payreq_number}</td><td className="py-3 px-5 text-sm text-slate-600">{r.po_number || r.pr_number || "—"}</td><td className="py-3 px-5 text-right text-sm font-mono text-slate-900">{fmtRp(r.amount)}</td><td className="py-3 px-5 text-sm text-slate-600">{r.estimated_pay_date || "—"}</td><td className="py-3 px-5"><Badge className={`border ${statusBadge(r.status)}`}>{r.status}</Badge></td></tr>
           ))}</tbody>

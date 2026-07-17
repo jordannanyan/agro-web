@@ -41,7 +41,7 @@ export default function ProcurementStockList() {
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead><tr className="bg-slate-50 border-b border-slate-100">{["Saprodi", "Gudang", "Masuk", "Keluar", "Sisa", "Status"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}</tr></thead>
+            <thead><tr className="bg-slate-50 border-b border-slate-100">{["Saprodi", "Gudang", "Masuk", "Keluar", "Sisa", "Status"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Sisa"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
             <tbody>
               {rows.map((r) => {
                 const min = minMap[`${r.warehouse_id}-${r.sapropdi_id}`];

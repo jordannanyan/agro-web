@@ -56,7 +56,7 @@ export default function StockManagement() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-slate-50 border-b border-slate-100">
-                {["Gudang", "Saprodi", "Total Masuk", "Total Keluar", "Sisa Stok"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}
+                {["Gudang", "Saprodi", "Total Masuk", "Total Keluar", "Sisa Stok"].map((h) => <th key={h} className={`${["Total Masuk", "Total Keluar", "Sisa Stok"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {invList.map((r) => (
