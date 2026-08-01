@@ -62,17 +62,29 @@ function FieldInput({ field, value, onChange }: { field: FieldDef; value: any; o
 function EditModal({ fields, row, onClose, onSave }: { fields: FieldDef[]; row: any | null; onClose: () => void; onSave: (data: any) => Promise<void> }) {
   const [form, setForm] = useState<any>(() => {
     const init: any = {};
-    fields.forEach((f) => { init[f.name] = row ? row[f.name] : (f.default ?? (f.type === "switch" ? true : "")); });
+    fields.forEach((f) => {
+      // The API never returns a password hash, so `row.password` is undefined and
+      // would fail the required check below. Start blank and let the user opt in.
+      if (f.type === "password") { init[f.name] = ""; return; }
+      init[f.name] = row ? row[f.name] : (f.default ?? (f.type === "switch" ? true : ""));
+    });
     return init;
   });
   const [saving, setSaving] = useState(false);
 
+  // Editing keeps the stored password unless a new one is typed.
+  const optional = (f: FieldDef) => f.type === "password" && !!row;
+
   async function submit() {
     for (const f of fields) {
+      if (optional(f)) continue;
       if (f.required && (form[f.name] === "" || form[f.name] == null)) { toast.error(`${f.label} wajib diisi`); return; }
     }
     setSaving(true);
-    try { await onSave(form); onClose(); }
+    const payload = { ...form };
+    // Send nothing rather than an empty string, so the field is unambiguously untouched.
+    for (const f of fields) if (optional(f) && !payload[f.name]) delete payload[f.name];
+    try { await onSave(payload); onClose(); }
     catch (e: any) { toast.error(e?.message || "Gagal menyimpan"); }
     finally { setSaving(false); }
   }
@@ -85,9 +97,9 @@ function EditModal({ fields, row, onClose, onSave }: { fields: FieldDef[]; row: 
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="overflow-y-auto flex-1 px-6 py-5 grid grid-cols-2 gap-4">
-          {fields.filter((f) => !(f.type === "password" && row && false)).map((f) => (
+          {fields.map((f) => (
             <div key={f.name} className={f.colSpan === 2 || f.type === "textarea" ? "col-span-2" : ""}>
-              <label className="text-xs text-slate-500 font-medium mb-1.5 block">{f.label}{f.required && <span className="text-red-500"> *</span>}{f.type === "password" && row && <span className="text-slate-400 font-normal"> (kosongkan jika tidak diubah)</span>}</label>
+              <label className="text-xs text-slate-500 font-medium mb-1.5 block">{f.label}{f.required && !optional(f) && <span className="text-red-500"> *</span>}{optional(f) && <span className="text-slate-400 font-normal"> (kosongkan jika tidak diubah)</span>}</label>
               <FieldInput field={f} value={form[f.name]} onChange={(v) => setForm((p: any) => ({ ...p, [f.name]: v }))} />
             </div>
           ))}
