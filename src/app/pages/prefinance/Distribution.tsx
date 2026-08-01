@@ -14,12 +14,21 @@ const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 interface DistRow {
   id: number; date: string; type_name: string; farmer_name: string; plot_name: string | null;
   sapropdi_name: string | null; quantity: number | null; total_amount: number; shipped_at: string | null;
+  scheme: string | null; warehouse_name: string | null;
 }
 
 function typeBadge(type: string) {
   const m: Record<string, string> = { Saprodi: "bg-emerald-50 text-emerald-700 border-emerald-200", Labor: "bg-blue-50 text-blue-700 border-blue-200", Transport: "bg-amber-50 text-amber-700 border-amber-200", Other: "bg-slate-100 text-slate-600 border-slate-200" };
   return m[type] || "bg-slate-100 text-slate-600 border-slate-200";
 }
+
+// Pre-Finance and Profit Sharing share this screen — the scheme comes from the
+// plot, so the only way to tell the two apart in a list is to print it.
+const SCHEME_META: Record<string, { label: string; cls: string }> = {
+  PreFinance:    { label: "Pre-Finance",    cls: "bg-sky-50 text-sky-700 border-sky-200" },
+  ProfitSharing: { label: "Profit Sharing", cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  BeliPutus:     { label: "Beli Putus",     cls: "bg-slate-100 text-slate-600 border-slate-200" },
+};
 
 export default function Distribution() {
   const navigate = useNavigate();
@@ -57,16 +66,25 @@ export default function Distribution() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
-              {["Tanggal", "Tipe", "Petani", "Plot", "Saprodi", "Qty", "Nilai", "Kirim", ""].map((h) => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">{h}</th>)}
+              {["Tanggal", "Tipe", "Skema", "Petani", "Plot", "Saprodi", "Gudang", "Qty", "Nilai", "Kirim", ""].map((h) => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">{h}</th>)}
             </tr></thead>
             <tbody>
               {list.map((r) => (
                 <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{r.date}</td>
                   <td className="py-3 px-4"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${typeBadge(r.type_name)}`}>{r.type_name}</span></td>
+                  <td className="py-3 px-4">
+                    {(() => { const m = SCHEME_META[r.scheme ?? ""] ?? SCHEME_META.BeliPutus;
+                      return <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${m.cls}`}>{m.label}</span>; })()}
+                  </td>
                   <td className="py-3 px-4 text-sm font-semibold text-slate-900">{r.farmer_name}</td>
                   <td className="py-3 px-4 text-sm text-slate-600">{r.plot_name || "—"}</td>
                   <td className="py-3 px-4 text-sm text-slate-600">{r.sapropdi_name || "—"}</td>
+                  <td className="py-3 px-4 text-sm text-slate-600">
+                    {r.warehouse_name || (r.type_name === "Saprodi"
+                      ? <span className="text-red-500" title="Tidak dikurangkan dari stok gudang mana pun">belum diisi</span>
+                      : "—")}
+                  </td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{r.quantity != null ? num(r.quantity) : "—"}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-amber-700">{fmtRp(r.total_amount)}</td>
                   <td className="py-3 px-4">

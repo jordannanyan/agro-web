@@ -81,6 +81,7 @@ export default function PaymentRequestCreate() {
     if (!entityId) { toast.error("Entitas wajib"); return; }
     if (sourceType === "PR" && !prId) { toast.error("Pilih PR sumber"); return; }
     if (sourceType === "PO" && !poId) { toast.error("Pilih PO sumber"); return; }
+    if (!budgetCodeId) { toast.error("Project Code wajib diisi"); return; }
     if (!(Number(amount) > 0)) { toast.error("Nominal harus > 0"); return; }
     const payload: any = {
       entity_id: Number(entityId),
@@ -146,8 +147,8 @@ export default function PaymentRequestCreate() {
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Detail Pembayaran</h2>
           <div className="grid grid-cols-2 gap-4">
             <div><EntityField value={entityId} onChange={setEntityId} /></div>
-            <div><label className={label}>Budget Code</label>
-              <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">—</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select>
+            <div><label className={label}>Project Code <span className="text-red-500">*</span></label>
+              <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">— pilih —</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select>
             </div>
             <div><label className={label}>Nominal (Rp) <span className="text-red-500">*</span></label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" /></div>
             <div><label className={label}>Penanggung Jawab</label><Input value={pic} onChange={(e) => setPic(e.target.value)} placeholder="Nama PIC" /></div>

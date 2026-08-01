@@ -7,25 +7,21 @@ import { toast } from "sonner";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Badge } from "../components/ui/badge";
 import { api } from "../lib/api";
 import { useApi } from "../lib/hooks";
+import { useAuth } from "../store/AuthContext";
+import { DocumentStatus, isMyTurn, type PendingInfo } from "../components/DocumentStatus";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
-interface PRRow { id: number; pr_number: string; entity_name: string; request_date: string; date_required: string | null; status: string; grand_total: number; requested_by_name: string | null; }
-interface PORow { id: number; po_number: string; pr_number: string | null; vendor_name: string; status: string; order_date: string; }
-interface PayRow { id: number; payreq_number: string; pr_number: string | null; po_number: string | null; route: string; amount: number; estimated_pay_date: string | null; status: string; }
+interface PRRow extends PendingInfo { id: number; pr_number: string; entity_name: string; request_date: string; date_required: string | null; status: string; grand_total: number; requested_by_name: string | null; }
+interface PORow extends PendingInfo { id: number; po_number: string; pr_number: string | null; vendor_name: string; status: string; order_date: string; }
+interface PayRow extends PendingInfo { id: number; payreq_number: string; pr_number: string | null; po_number: string | null; route: string; amount: number; estimated_pay_date: string | null; status: string; }
 
-function statusBadge(status: string) {
-  const s = status?.toLowerCase() || "";
-  if (s.includes("approv")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (s.includes("pending") || s.includes("waiting")) return "bg-amber-50 text-amber-700 border-amber-200";
-  if (s.includes("reject")) return "bg-red-50 text-red-700 border-red-200";
-  if (s.includes("revis")) return "bg-violet-50 text-violet-700 border-violet-200";
-  if (s.includes("paid") || s.includes("deliver")) return "bg-green-50 text-green-700 border-green-200";
-  return "bg-slate-100 text-slate-700 border-slate-200";
-}
+// A row awaiting the viewer is tinted across its whole width — the badge alone is
+// easy to miss when a table runs long.
+const rowClass = (row: PendingInfo, roleCode?: string | null) =>
+  isMyTurn(row, roleCode) ? "bg-amber-50/60 hover:bg-amber-50" : "hover:bg-slate-50";
 
 function ProcurementRouting() {
   const routes = [
@@ -64,6 +60,7 @@ export default function Procurement() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const { user } = useAuth();
 
   const { data: prs, refetch: refetchPR } = useApi<PRRow[]>("purchase-requests");
   const { data: pos } = useApi<PORow[]>("purchase-orders");
@@ -75,6 +72,8 @@ export default function Procurement() {
     location.pathname.includes("/payment-request") ? "payment-request" : "purchase-request";
 
   const prList = prs || [], poList = pos || [], payList = pays || [];
+  // What the signed-in role is actually holding up, across all three document types.
+  const myTurn = [...prList, ...poList, ...payList].filter((d) => isMyTurn(d, user?.role_code)).length;
 
   async function del(kind: "pr", id: number) {
     if (!confirm("Hapus dokumen ini?")) return;
@@ -88,9 +87,17 @@ export default function Procurement() {
 
   return (
     <div className="space-y-6 pb-8">
-      <div>
-        <h1 className="text-2xl text-slate-900 mb-1">Procurement</h1>
-        <p className="text-sm text-slate-500">Fairventures Agroforestry · Integrated Procurement Workflow</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl text-slate-900 mb-1">Procurement</h1>
+          <p className="text-sm text-slate-500">Fairventures Agroforestry · Integrated Procurement Workflow</p>
+        </div>
+        {myTurn > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500 text-white shadow-sm">
+            <CreditCard className="w-4 h-4" />
+            <span className="text-sm font-semibold">{myTurn} dokumen menunggu persetujuan Anda</span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -134,13 +141,13 @@ export default function Procurement() {
                 </tr></thead>
                 <tbody>
                   {prList.filter((pr) => searchQuery === "" || pr.pr_number.toLowerCase().includes(searchQuery.toLowerCase())).map((pr) => (
-                    <tr key={pr.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                    <tr key={pr.id} className={`border-b border-slate-50 ${rowClass(pr, user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-blue-700">{pr.pr_number}</td>
                       <td className="py-4 px-6 text-sm text-slate-600">{pr.entity_name}</td>
                       <td className="py-4 px-6 text-sm text-slate-600">{pr.request_date}</td>
                       <td className="py-4 px-6 text-sm text-slate-600">{pr.date_required || "—"}</td>
                       <td className="py-4 px-6 text-sm font-mono text-slate-900 text-right">{fmtRp(pr.grand_total)}</td>
-                      <td className="py-4 px-6"><Badge className={`border ${statusBadge(pr.status)}`}>{pr.status}</Badge></td>
+                      <td className="py-4 px-6"><DocumentStatus row={pr} /></td>
                       <td className="py-4 px-6 text-sm text-slate-600">{pr.requested_by_name || "—"}</td>
                       <td className="py-4 px-6"><div className="flex items-center justify-end gap-1">
                         <Button size="sm" variant="ghost" onClick={() => navigate(`/procurement/pr/${pr.id}`)}><Eye className="w-4 h-4" /></Button>
@@ -168,12 +175,12 @@ export default function Procurement() {
                 </tr></thead>
                 <tbody>
                   {poList.map((po) => (
-                    <tr key={po.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                    <tr key={po.id} className={`border-b border-slate-50 ${rowClass(po, user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-emerald-700">{po.po_number}</td>
                       <td className="py-4 px-6 text-sm font-mono text-blue-600">{po.pr_number || "—"}</td>
                       <td className="py-4 px-6 text-sm text-slate-900">{po.vendor_name}</td>
                       <td className="py-4 px-6 text-sm text-slate-600">{po.order_date}</td>
-                      <td className="py-4 px-6"><Badge className={`border ${statusBadge(po.status)}`}>{po.status}</Badge></td>
+                      <td className="py-4 px-6"><DocumentStatus row={po} /></td>
                       <td className="py-4 px-6"><div className="flex items-center justify-end gap-1">
                         <Button size="sm" variant="ghost" onClick={() => navigate(`/procurement/po/${po.id}`)}><Eye className="w-4 h-4" /></Button>
                       </div></td>
@@ -200,13 +207,13 @@ export default function Procurement() {
                 </tr></thead>
                 <tbody>
                   {payList.map((pay) => (
-                    <tr key={pay.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                    <tr key={pay.id} className={`border-b border-slate-50 ${rowClass(pay, user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-amber-700">{pay.payreq_number}</td>
                       <td className="py-4 px-6"><span className={`text-xs font-semibold px-2 py-0.5 rounded border ${pay.route === "via_po" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>{pay.route === "via_po" ? "dari PO" : "dari PR"}</span></td>
                       <td className="py-4 px-6 text-sm font-mono text-blue-600">{pay.po_number || pay.pr_number || "—"}</td>
                       <td className="py-4 px-6 text-sm font-mono text-slate-900 text-right">{fmtRp(pay.amount)}</td>
                       <td className="py-4 px-6 text-sm text-slate-600">{pay.estimated_pay_date || "—"}</td>
-                      <td className="py-4 px-6"><Badge className={`border ${statusBadge(pay.status)}`}>{pay.status}</Badge></td>
+                      <td className="py-4 px-6"><DocumentStatus row={pay} /></td>
                       <td className="py-4 px-6"><div className="flex items-center justify-end gap-1">
                         <Button size="sm" variant="ghost" onClick={() => navigate(`/procurement/payreq/${pay.id}`)}><Eye className="w-4 h-4" /></Button>
                       </div></td>

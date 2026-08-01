@@ -11,10 +11,15 @@ const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface PFType { id: number; type_name: string; }
 interface Farmer { id: number; farmer_name: string; }
-interface Plot { id: number; plot_name: string; farmer_id: number; }
+interface Plot { id: number; plot_name: string; farmer_id: number; scheme?: string | null; }
 interface Sapropdi { id: number; sapropdi_name: string; }
 interface Unit { id: number; unit_name: string; }
 interface Commodity { id: number; commodities_name: string; }
+interface Warehouse { id: number; warehouse_name: string; }
+
+const SCHEME_LABEL: Record<string, string> = {
+  PreFinance: "Pre-Finance", ProfitSharing: "Profit Sharing", BeliPutus: "Beli Putus",
+};
 
 export default function DistributionCreate() {
   const navigate = useNavigate();
@@ -24,10 +29,12 @@ export default function DistributionCreate() {
   const { data: sapropdi } = useApi<Sapropdi[]>("sapropdi");
   const { data: units } = useApi<Unit[]>("units");
   const { data: commodities } = useApi<Commodity[]>("commodities");
+  const { data: warehouses } = useApi<Warehouse[]>("warehouses");
 
   const [typeId, setTypeId] = useState("");
   const [farmerId, setFarmerId] = useState("");
   const [plotId, setPlotId] = useState("");
+  const [warehouseId, setWarehouseId] = useState("");
   const [commodityId, setCommodityId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [sapropdiId, setSapropdiId] = useState("");
@@ -42,6 +49,8 @@ export default function DistributionCreate() {
   const typeName = (types || []).find((t) => String(t.id) === typeId)?.type_name || "";
   const isSaprodi = typeName === "Saprodi";
   const farmerPlots = useMemo(() => (plots || []).filter((p) => String(p.farmer_id) === farmerId), [plots, farmerId]);
+  // The scheme rides on the plot, so the form only reports it — it is never chosen here.
+  const plotScheme = farmerPlots.find((p) => String(p.id) === plotId)?.scheme || null;
   const total = isSaprodi ? (parseFloat(qty) || 0) * (parseFloat(price) || 0) : (parseFloat(directAmount) || 0);
   const selectCls = "w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white";
   const label = "text-xs text-slate-500 font-medium mb-1.5 block";
@@ -49,11 +58,15 @@ export default function DistributionCreate() {
   async function save() {
     if (!typeId || !farmerId || !date) { toast.error("Tipe, petani, tanggal wajib"); return; }
     if (isSaprodi && (!sapropdiId || !(parseFloat(qty) > 0))) { toast.error("Saprodi & qty wajib untuk tipe Saprodi"); return; }
+    // Saprodi leaves a warehouse, so the API refuses it without one; say so here
+    // rather than letting the request come back with a 422.
+    if (isSaprodi && !warehouseId) { toast.error("Gudang asal wajib untuk tipe Saprodi"); return; }
     if (!isSaprodi && !(parseFloat(directAmount) > 0)) { toast.error("Nominal wajib > 0"); return; }
     const form = new FormData();
     form.append("pre_finance_type_id", typeId);
     form.append("farmer_id", farmerId);
     if (plotId) form.append("plot_id", plotId);
+    if (warehouseId) form.append("warehouse_id", warehouseId);
     if (commodityId) form.append("commodities_id", commodityId);
     form.append("date", date);
     if (isSaprodi) {
@@ -91,15 +104,29 @@ export default function DistributionCreate() {
             <div><label className={label}>Tipe <span className="text-red-500">*</span></label><select value={typeId} onChange={(e) => setTypeId(e.target.value)} className={selectCls}><option value="">Pilih tipe…</option>{(types || []).map((t) => <option key={t.id} value={t.id}>{t.type_name}</option>)}</select></div>
             <div><label className={label}>Tanggal <span className="text-red-500">*</span></label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
             <div><label className={label}>Petani <span className="text-red-500">*</span></label><select value={farmerId} onChange={(e) => { setFarmerId(e.target.value); setPlotId(""); }} className={selectCls}><option value="">Pilih petani…</option>{(farmers || []).map((f) => <option key={f.id} value={f.id}>{f.farmer_name}</option>)}</select></div>
-            <div><label className={label}>Plot</label><select value={plotId} onChange={(e) => setPlotId(e.target.value)} disabled={!farmerId} className={selectCls}><option value="">—</option>{farmerPlots.map((p) => <option key={p.id} value={p.id}>{p.plot_name}</option>)}</select></div>
+            <div>
+              <label className={label}>Plot{plotScheme && <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-normal">{SCHEME_LABEL[plotScheme] ?? plotScheme}</span>}</label>
+              <select value={plotId} onChange={(e) => setPlotId(e.target.value)} disabled={!farmerId} className={selectCls}>
+                <option value="">—</option>
+                {farmerPlots.map((p) => <option key={p.id} value={p.id}>{p.plot_name}{p.scheme ? ` · ${SCHEME_LABEL[p.scheme] ?? p.scheme}` : ""}</option>)}
+              </select>
+            </div>
             <div><label className={label}>Komoditas</label><select value={commodityId} onChange={(e) => setCommodityId(e.target.value)} className={selectCls}><option value="">—</option>{(commodities || []).map((c) => <option key={c.id} value={c.id}>{c.commodities_name}</option>)}</select></div>
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
-          <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">{isSaprodi ? "Detail Saprodi (qty × harga)" : "Nominal"}</h2>
+          <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">{isSaprodi ? "Detail Saprodi (qty × harga) — stok keluar" : "Nominal"}</h2>
           {isSaprodi ? (
             <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className={label}>Gudang Asal <span className="text-red-500">*</span></label>
+                <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={selectCls}>
+                  <option value="">Pilih gudang…</option>
+                  {(warehouses || []).map((w) => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
+                </select>
+                <p className="text-xs text-slate-400 mt-1">Kuantitas di bawah akan dikurangkan dari stok gudang ini.</p>
+              </div>
               <div><label className={label}>Saprodi <span className="text-red-500">*</span></label><select value={sapropdiId} onChange={(e) => setSapropdiId(e.target.value)} className={selectCls}><option value="">Pilih…</option>{(sapropdi || []).map((s) => <option key={s.id} value={s.id}>{s.sapropdi_name}</option>)}</select></div>
               <div><label className={label}>Satuan</label><select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={selectCls}><option value="">—</option>{(units || []).map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}</select></div>
               <div><label className={label}>Kuantitas <span className="text-red-500">*</span></label><Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0" /></div>
