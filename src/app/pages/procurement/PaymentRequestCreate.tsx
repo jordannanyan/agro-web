@@ -6,8 +6,8 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { EntityField } from "../../components/EntityField";
 
-interface Entity { id: number; entities_name: string; }
 interface BudgetCode { id: number; code: string; }
 interface PROption { id: number; pr_number: string; entity_id: number; grand_total: number; }
 interface POOption { id: number; po_number: string; entity_id: number; }
@@ -18,7 +18,6 @@ export default function PaymentRequestCreate() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = !!id;
-  const { data: entities } = useApi<Entity[]>("entities");
   const { data: budgetCodes } = useApi<BudgetCode[]>("budget-codes");
   const { data: prs } = useApi<PROption[]>("purchase-requests", { status: "Approved" });
   const { data: pos } = useApi<POOption[]>("purchase-orders");
@@ -146,9 +145,7 @@ export default function PaymentRequestCreate() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Detail Pembayaran</h2>
           <div className="grid grid-cols-2 gap-4">
-            <div><label className={label}>Entitas <span className="text-red-500">*</span></label>
-              <select value={entityId} onChange={(e) => setEntityId(e.target.value)} className={selectCls}><option value="">Pilih…</option>{(entities || []).map((e) => <option key={e.id} value={e.id}>{e.entities_name}</option>)}</select>
-            </div>
+            <div><EntityField value={entityId} onChange={setEntityId} /></div>
             <div><label className={label}>Budget Code</label>
               <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">—</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select>
             </div>

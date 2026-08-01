@@ -11,6 +11,8 @@ export interface AuthUser {
   role?: string | null;
   /** Stable slug (FIELD_ADMIN, PROCUREMENT, …) — all access checks use this. */
   role_code?: string | null;
+  /** True for roles that serve every PT (Procurement, Finance, Director). */
+  role_cross_entity?: boolean;
   role_id?: number | null;
   entity_id?: number | null;
   entity?: { id: number; entities_name: string } | null;
@@ -58,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             position: u.data?.position,
             role: u.role,
             role_code: u.roleCode ?? user?.role_code ?? null,
+            role_cross_entity: u.roleCrossEntity ?? user?.role_cross_entity ?? false,
             role_id: u.data?.role_id ?? null,
             entity_id: u.data?.entity_id ?? null,
             entity: user?.entity ?? null,

@@ -6,8 +6,8 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { EntityField } from "../../components/EntityField";
 
-interface Entity { id: number; entities_name: string; }
 interface BudgetCode { id: number; code: string; }
 interface Unit { id: number; unit_name: string; }
 interface Sapropdi { id: number; sapropdi_name: string; }
@@ -29,7 +29,6 @@ export default function PurchaseRequestCreate() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = !!id;
-  const { data: entities } = useApi<Entity[]>("entities");
   const { data: budgetCodes } = useApi<BudgetCode[]>("budget-codes");
   const { data: units } = useApi<Unit[]>("units");
   const { data: sapropdi } = useApi<Sapropdi[]>("sapropdi");
@@ -122,11 +121,7 @@ export default function PurchaseRequestCreate() {
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Informasi Umum</h2>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="text-xs text-slate-500 font-medium mb-1.5 block">Entitas <span className="text-red-500">*</span></label>
-              <select value={entityId} onChange={(e) => setEntityId(e.target.value)} className={selectCls}>
-                <option value="">Pilih entitas…</option>
-                {(entities || []).map((e) => <option key={e.id} value={e.id}>{e.entities_name}</option>)}
-              </select>
+              <EntityField value={entityId} onChange={setEntityId} />
             </div>
             <div>
               <label className="text-xs text-slate-500 font-medium mb-1.5 block">Tanggal Request</label>
