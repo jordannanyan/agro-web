@@ -7,7 +7,10 @@ export interface AuthUser {
   username: string;
   email?: string;
   position?: string;
+  /** Display label of the role — admins may rename it, so never gate on this. */
   role?: string | null;
+  /** Stable slug (FIELD_ADMIN, PROCUREMENT, …) — all access checks use this. */
+  role_code?: string | null;
   role_id?: number | null;
   entity_id?: number | null;
   entity?: { id: number; entities_name: string } | null;
@@ -54,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: u.data?.email,
             position: u.data?.position,
             role: u.role,
+            role_code: u.roleCode ?? user?.role_code ?? null,
             role_id: u.data?.role_id ?? null,
             entity_id: u.data?.entity_id ?? null,
             entity: user?.entity ?? null,

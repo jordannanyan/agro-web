@@ -1,25 +1,23 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Sprout, Eye, EyeOff, Lock, User, Building2 } from "lucide-react";
+import { Sprout, Eye, EyeOff, Lock, User } from "lucide-react";
 import { useAuth } from "../store/AuthContext";
 import { getToken } from "../lib/api";
 
 const ROLES = [
-  { label: "Intern", desc: "Buat PR saja" },
-  { label: "PM (Project Manager)", desc: "Approve PR, buat PO" },
-  { label: "Head / Manager", desc: "Approve PO, distribusi" },
-  { label: "Finance", desc: "Approve PayReq, kelola Pre-Finance" },
-  { label: "Director", desc: "Approve PR besar & PO strategis" },
+  { label: "Field Admin", desc: "Buat PR, kelola stok masuk/keluar" },
+  { label: "Procurement", desc: "Buat PO & Payment Request" },
+  { label: "Project Manager", desc: "Approve PR, PO, PayReq" },
+  { label: "Finance Manager", desc: "Acknowledge PO, approve PayReq" },
+  { label: "Finance Staff", desc: "Input pembayaran PayReq" },
+  { label: "Director", desc: "Approve PO, acknowledge PayReq" },
 ];
-
-const ENTITIES = ["PT. SNBS", "PT. JNBS"];
 
 export default function Login() {
   const navigate = useNavigate();
   const { login, user } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [entity, setEntity] = useState("PT. SNBS");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,7 +29,7 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) {
-      setError("Username dan password wajib diisi.");
+      setError("Username/email dan password wajib diisi.");
       return;
     }
     setError("");
@@ -40,7 +38,7 @@ export default function Login() {
       await login(username.trim(), password);
       navigate("/", { replace: true });
     } catch (err: any) {
-      setError(err?.message || "Login gagal. Periksa username & password.");
+      setError(err?.message || "Login gagal. Periksa username/email & password.");
     } finally {
       setLoading(false);
     }
@@ -121,27 +119,12 @@ export default function Login() {
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
-            {/* Entitas */}
+            {/* Username or email. There is deliberately no entity picker: the entity
+                comes from the account itself, and Procurement, Finance and the
+                Director work across both SNBS and JNBS. */}
             <div>
               <label className="text-xs font-semibold text-slate-600 mb-1.5 block uppercase tracking-wide">
-                Entitas / Perusahaan
-              </label>
-              <div className="relative">
-                <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <select
-                  value={entity}
-                  onChange={(e) => setEntity(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
-                >
-                  {ENTITIES.map((e) => <option key={e} value={e}>{e}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Username */}
-            <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1.5 block uppercase tracking-wide">
-                Username
+                Username atau Email
               </label>
               <div className="relative">
                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -149,7 +132,7 @@ export default function Login() {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Masukkan username"
+                  placeholder="mis. elma.aryanti atau elma.aryanti@snbs.earth"
                   className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
                 />
               </div>

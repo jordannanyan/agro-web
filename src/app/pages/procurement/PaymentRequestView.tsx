@@ -1,9 +1,14 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, CreditCard, Pencil } from "lucide-react";
+import { ArrowLeft, CreditCard, Pencil, Banknote } from "lucide-react";
+import { toast } from "sonner";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { useAuth } from "../../store/AuthContext";
+import { canRecordPayment } from "../../lib/permissions";
 import { ApprovalTimeline, ApprovalStep } from "../../components/ApprovalTimeline";
 import { DocumentAttachments } from "../../components/DocumentAttachments";
 
@@ -14,9 +19,12 @@ interface PayDetail {
   pr_number: string | null; po_number: string | null; route: string;
   amount: number; reason: string | null; person_in_charge: string | null;
   activity_date: string | null; estimated_pay_date: string | null; status: string;
+  released_pay_date: string | null;
   bank_name: string | null; bank_account: string | null; beneficiary_name: string | null;
   approvals: ApprovalStep[];
 }
+
+interface PaymentMethod { id: number; method_name: string }
 
 function statusBadge(status: string) {
   const s = status?.toLowerCase() || "";
@@ -29,7 +37,40 @@ function statusBadge(status: string) {
 export default function PaymentRequestView() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
   const { data, loading, error, refetch } = useApi<PayDetail>(id ? `payment-requests/${id}` : null, undefined, [id]);
+  const { data: methods } = useApi<PaymentMethod[]>("payment-methods");
+
+  const [paying, setPaying] = useState(false);
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [methodId, setMethodId] = useState("");
+  const [payNote, setPayNote] = useState("");
+
+  // The approval chain must be fully signed off before cash may be released.
+  // The API enforces this too — this only decides whether to show the form.
+  const approvalSteps = (data?.approvals || []).filter((s) => s.step_label !== "Payment");
+  const fullyApproved = approvalSteps.length > 0 && approvalSteps.every((s) => s.status === "Approved");
+  const alreadyPaid = data?.status === "Paid";
+  const showPayPanel = !!data && canRecordPayment(user?.role_code) && fullyApproved && !alreadyPaid;
+
+  async function recordPayment() {
+    if (!data) return;
+    setPaying(true);
+    try {
+      await api.post(`payment-requests/${data.id}/pay`, {
+        released_pay_date: payDate,
+        payment_method_id: methodId || undefined,
+        note: payNote || undefined,
+      });
+      toast.success("Pembayaran dicatat");
+      setPayNote("");
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message || "Gagal mencatat pembayaran");
+    } finally {
+      setPaying(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFBFC] -mx-8 -my-8">
@@ -90,6 +131,55 @@ export default function PaymentRequestView() {
               <h2 className="text-slate-900 font-semibold mb-4">Alur Approval</h2>
               <ApprovalTimeline docType="PayReq" docId={data.id} steps={data.approvals || []} onChanged={refetch} />
             </Card>
+
+            {/* Payment execution — step 5. Deliberately outside the approval timeline:
+                the chain ends with the Director acknowledging, then Finance releases
+                the cash. Both Finance Manager and Finance Staff may record it. */}
+            {showPayPanel && (
+              <Card className="p-6 border-sky-200 bg-sky-50/40">
+                <div className="flex items-center gap-2 mb-1">
+                  <Banknote className="w-4 h-4 text-sky-600" />
+                  <h2 className="text-slate-900 font-semibold">Input Pembayaran</h2>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">
+                  Seluruh approval sudah selesai. Catat realisasi pembayaran {fmtRp(data.amount)}.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Tanggal Bayar</label>
+                    <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/30" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Metode</label>
+                    <select value={methodId} onChange={(e) => setMethodId(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/30">
+                      <option value="">— pilih —</option>
+                      {(methods || []).map((m) => <option key={m.id} value={m.id}>{m.method_name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Catatan (opsional)</label>
+                    <input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="No. referensi transfer…"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/30" />
+                  </div>
+                </div>
+                <Button className="mt-4 bg-sky-600 hover:bg-sky-700 text-white" disabled={paying} onClick={recordPayment}>
+                  <Banknote className="w-4 h-4 mr-1.5" />{paying ? "Menyimpan…" : "Catat Pembayaran"}
+                </Button>
+              </Card>
+            )}
+
+            {alreadyPaid && (
+              <Card className="p-6 border-emerald-200 bg-emerald-50/40">
+                <div className="flex items-center gap-2">
+                  <Banknote className="w-4 h-4 text-emerald-600" />
+                  <p className="text-sm text-emerald-800 font-medium">
+                    Sudah dibayar{data.released_pay_date ? ` pada ${data.released_pay_date}` : ""}.
+                  </p>
+                </div>
+              </Card>
+            )}
 
             <Card className="p-6">
               <DocumentAttachments docType="PayReq" docId={data.id} categories={["Bukti Bayar", "Invoice", "ToR / Estimasi", "Lainnya"]} />

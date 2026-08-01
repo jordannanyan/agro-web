@@ -118,21 +118,22 @@ export default function DashboardLayout() {
     entity: user.entity?.entities_name || (user.entity_id ? `Entity #${user.entity_id}` : "Lintas Entitas"),
   };
 
-  const role = user.role;
+  // Gate on the stable slug, not the display name.
+  const roleCode = user.role_code;
 
   // Filter the sidebar to what this role may access.
   const visibleMenu = menuItems
     .map((item) => {
       if ("subItems" in item && item.subItems) {
-        const subItems = item.subItems.filter((s) => canAccessPath(role, s.path));
+        const subItems = item.subItems.filter((s) => canAccessPath(roleCode, s.path));
         return subItems.length ? { ...item, subItems } : null;
       }
-      return canAccessPath(role, (item as any).path || "#") ? item : null;
+      return canAccessPath(roleCode, (item as any).path || "#") ? item : null;
     })
     .filter(Boolean) as typeof menuItems;
 
   // Block direct-URL access to routes this role isn't allowed to open.
-  const routeAllowed = canAccessPath(role, location.pathname);
+  const routeAllowed = canAccessPath(roleCode, location.pathname);
 
   return (
     <div className="flex h-screen bg-[#FAFBFC]">

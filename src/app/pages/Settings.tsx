@@ -59,18 +59,23 @@ function GeneralTab() {
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("general");
 
-  // FK option sources
+  // FK option sources.
+  // Entities are fetched with ?type=all: the endpoint returns only Operational PTs by
+  // default, but staff are assigned to WLI (Support) and NBSV (System) too, so the
+  // admin screens need the complete list.
   const { data: roles } = useApi<any[]>("roles");
-  const { data: entities } = useApi<any[]>("entities");
+  const { data: entities } = useApi<any[]>("entities", { type: "all" });
   const { data: kth } = useApi<any[]>("kth");
   const { data: warehouses } = useApi<any[]>("warehouses");
   const { data: sapropdi } = useApi<any[]>("sapropdi");
+  const { data: units } = useApi<any[]>("units");
 
   const entityOpts = opt(entities, "id", "entities_name");
   const roleOpts = opt(roles, "id", "role_name");
   const kthOpts = opt(kth, "id", "kth_name");
   const whOpts = opt(warehouses, "id", "warehouse_name");
   const sapropdiOpts = opt(sapropdi, "id", "sapropdi_name");
+  const unitOpts = opt(units, "id", "unit_name");
 
   // ── Field configs ──
   const vendorFields: FieldDef[] = [
@@ -118,6 +123,21 @@ export default function Settings() {
     { name: "min_amount", label: "Min Nominal", type: "number", hideInTable: true },
     { name: "max_amount", label: "Max Nominal", type: "number", hideInTable: true },
   ];
+  // Saprodi master. `item_code` (BA001, UR006, …) is the unique key — the 2-letter
+  // `short_code` is shared by several items (MA = Mango/Manure/Manzate/Machine Sprayer)
+  // and must never be treated as an identifier.
+  const sapropdiFields: FieldDef[] = [
+    { name: "item_code", label: "ID Barang", required: true, placeholder: "mis. UR006" },
+    { name: "sapropdi_name", label: "Spesifikasi Barang", required: true },
+    {
+      name: "category", label: "Jenis", type: "select", options: [
+        "Seedlings", "Fertilizer", "Herbicide", "Insecticide", "Fungicide", "Equipment", "Others",
+      ].map((c) => ({ value: c, label: c })),
+    },
+    { name: "unit_id", label: "Satuan", type: "select", options: unitOpts },
+    { name: "short_code", label: "Kode", hideInTable: true, placeholder: "2 huruf, tidak unik" },
+    { name: "legacy_no", label: "No. Asli", type: "number", hideInTable: true },
+  ];
   const commodityFields: FieldDef[] = [{ name: "commodities_name", label: "Komoditas", required: true }];
   const gradeFields: FieldDef[] = [{ name: "grade_name", label: "Grade", required: true }];
   const offtakerFields: FieldDef[] = [
@@ -163,6 +183,7 @@ export default function Settings() {
           {tab("general", SettingsIcon, "General")}
           {tab("vendors", Package, "Vendor")}
           {tab("budget", DollarSign, "Budget Codes")}
+          {tab("saprodi", Sprout, "Saprodi")}
           {tab("units", Tag, "Satuan")}
           {tab("payment-methods", CreditCard, "Metode Bayar")}
           {tab("prefinance-types", Building2, "Tipe Pre-Finance")}
@@ -180,6 +201,7 @@ export default function Settings() {
         <TabsContent value="general"><GeneralTab /></TabsContent>
         <TabsContent value="vendors"><Card className="p-6"><MasterCrud endpoint="vendors" title="Master Vendor" fields={vendorFields} /></Card></TabsContent>
         <TabsContent value="budget"><Card className="p-6"><MasterCrud endpoint="budget-codes" title="Master Budget Codes" fields={budgetFields} /></Card></TabsContent>
+        <TabsContent value="saprodi"><Card className="p-6"><MasterCrud endpoint="sapropdi" title="Master Barang Saprodi" fields={sapropdiFields} /></Card></TabsContent>
         <TabsContent value="units"><Card className="p-6"><MasterCrud endpoint="units" title="Master Satuan" fields={unitFields} /></Card></TabsContent>
         <TabsContent value="payment-methods"><Card className="p-6"><MasterCrud endpoint="payment-methods" title="Master Metode Pembayaran" fields={paymentFields} /></Card></TabsContent>
         <TabsContent value="prefinance-types"><Card className="p-6"><MasterCrud endpoint="pre-finance-types" title="Master Tipe Pre-Finance" fields={preFinanceFields} /></Card></TabsContent>
@@ -187,7 +209,7 @@ export default function Settings() {
         <TabsContent value="approval">
           <Card className="p-6">
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
-              <p className="text-xs text-amber-700"><strong>Catatan:</strong> Step Director pada PR muncul kondisional via Min Nominal (mis. ≥ 50 jt). Entitas kosong = berlaku semua entitas.</p>
+              <p className="text-xs text-amber-700"><strong>Catatan:</strong> Route bersifat <strong>per entitas</strong> — Project Manager SNBS dan JNBS berbeda orang. Entitas yang punya route sendiri memakai route itu; baris tanpa entitas hanya dipakai sebagai cadangan bagi entitas yang belum punya route. Step <em>Payment Process</em> pada PayReq tidak dibuat di sini: pembayaran dicatat dari halaman Payment Request oleh Finance Manager / Finance Staff.</p>
             </div>
             <MasterCrud endpoint="approval-routes" title="Approval Routes" fields={approvalFields} />
           </Card>
