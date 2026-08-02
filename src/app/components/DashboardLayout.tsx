@@ -45,6 +45,8 @@ const menuItems = [
     subItems: [
       { id: "wh-stock",    label: "Inventory Saprodi", path: "/warehouse/stock-list" },
       { id: "wh-stockin",  label: "Stock In",          path: "/warehouse/stock-in" },
+      { id: "wh-stockout", label: "Stock Out",         path: "/warehouse/stock-out" },
+      { id: "wh-lines",    label: "Riwayat Barang Keluar", path: "/warehouse/stock-out/riwayat" },
       { id: "wh-card",     label: "Kartu Stok",        path: "/warehouse/stock-card" },
       { id: "wh-reorder",  label: "Reorder Monitoring", path: "/warehouse/reorder" },
     ],
@@ -64,7 +66,8 @@ const menuItems = [
     icon: CreditCard,
     label: "Pre-Finance",
     subItems: [
-      { id: "distribution", label: "Distribusi", path: "/prefinance/distribution" },
+      // Distribusi moved to Gudang → Stock Out. Pre-Finance keeps what it owns:
+      // what the farmer owes and what has been paid back.
       { id: "installment", label: "Cicilan", path: "/prefinance/installment" },
       { id: "outstanding", label: "Outstanding Petani", path: "/prefinance/outstanding" },
     ],

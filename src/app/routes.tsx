@@ -66,6 +66,7 @@ export const router = createBrowserRouter([
       { path: "warehouse/stock-in",            Component: StockManagement },
       { path: "warehouse/stock-out",           Component: StockOutList },
       { path: "warehouse/stock-out/create",    Component: StockOutCreate },
+      { path: "warehouse/stock-out/riwayat",   Component: Distribution },
       { path: "warehouse/stock-out/:id",       Component: StockOutView },
       // Legacy route kept for compatibility
       { path: "warehouse/stock-management",    Component: StockManagement },
@@ -83,9 +84,6 @@ export const router = createBrowserRouter([
       // ── Pre Finance ───────────────────────────────────────────────────────
       { path: "prefinance/installment",        Component: Installment },
       { path: "prefinance/installment/create", Component: InstallmentCreate },
-      { path: "prefinance/distribution",       Component: Distribution },
-      // Superseded by Stock Out; the old path is kept so existing links still work.
-      { path: "prefinance/distribution/create",Component: StockOutCreate },
       { path: "prefinance/outstanding",        Component: OutstandingFarmer },
 
       // ── Finance sub-pages ─────────────────────────────────────────────────
