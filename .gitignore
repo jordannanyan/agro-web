@@ -13,3 +13,6 @@ yarn-error.log*
 !.vscode/extensions.json
 .idea/
 *.tsbuildinfo
+
+# Database dumps -- never belong in the repo
+*.sql
