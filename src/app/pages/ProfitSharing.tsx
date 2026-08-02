@@ -1,5 +1,5 @@
-import { useLocation } from "react-router";
-import { TrendingUp } from "lucide-react";
+import { useLocation, useNavigate } from "react-router";
+import { TrendingUp, PackageMinus } from "lucide-react";
 import { Card } from "../components/ui/card";
 import { MasterCrud, FieldDef } from "../components/MasterCrud";
 import { useApi } from "../lib/hooks";
@@ -76,6 +76,7 @@ function PLTab() {
 
 export default function ProfitSharing() {
   const location = useLocation();
+  const navigate = useNavigate();
   const activeTab: TabId = PATH_TO_TAB[location.pathname] ?? "investment";
 
   const { data: farmers } = useApi<any[]>("farmers");
@@ -117,7 +118,31 @@ export default function ProfitSharing() {
         <div><h1 className="text-2xl text-slate-900">Profit Sharing</h1><p className="text-sm text-slate-500">Investasi operasional → penjualan → bagi hasil petani & perusahaan</p></div>
       </div>
 
-      {activeTab === "investment" && <Card className="p-6"><MasterCrud endpoint="profit-sharing/investments" title="Investasi Operasional" fields={investmentFields} emptyText="Belum ada investasi" /></Card>}
+      {activeTab === "investment" && (
+        <>
+          {/* Saprodi is stock, and stock leaves through the warehouse. Recording it
+              here as a bare amount is what used to let goods reach a farmer without
+              ever being deducted from a warehouse. */}
+          <Card className="p-4 border-orange-200 bg-orange-50/60">
+            <div className="flex items-start gap-3">
+              <PackageMinus className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold text-orange-800">Saprodi dicatat lewat Stock Out, bukan di sini.</p>
+                <p className="text-orange-700 mt-0.5">
+                  Barang yang keluar gudang harus mengurangi stok, dan itu hanya terjadi lewat Stock Out —
+                  yang juga otomatis terhitung sebagai investasi di laporan P/L. Form di bawah untuk biaya
+                  operasional non-barang saja (tenaga kerja, transport, sewa).
+                </p>
+                <button onClick={() => navigate("/warehouse/stock-out/create")}
+                  className="mt-2 text-sm font-semibold text-orange-800 underline underline-offset-2 hover:text-orange-900">
+                  Buka Stock Out →
+                </button>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-6"><MasterCrud endpoint="profit-sharing/investments" title="Investasi Operasional (non-barang)" fields={investmentFields} emptyText="Belum ada investasi" /></Card>
+        </>
+      )}
       {activeTab === "revenue" && <RevenueTab />}
       {activeTab === "pl" && <PLTab />}
       {activeTab === "ps" && <Card className="p-6"><MasterCrud endpoint="profit-sharing/shares" title="Bagi Hasil (Split)" fields={shareFields} emptyText="Belum ada perhitungan bagi hasil" /></Card>}

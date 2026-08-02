@@ -14,6 +14,9 @@ import MapMonitoring from "./pages/MapMonitoring";
 import WarehouseDashboardSimple from "./pages/warehouse/WarehouseDashboardSimple";
 import StockManagement from "./pages/warehouse/StockManagement";
 import StockInCreate from "./pages/warehouse/StockInCreate";
+import StockOutList from "./pages/warehouse/StockOutList";
+import StockOutCreate from "./pages/warehouse/StockOutCreate";
+import StockOutView from "./pages/warehouse/StockOutView";
 import StockCard from "./pages/warehouse/StockCard";
 import ReorderMonitoring from "./pages/warehouse/ReorderMonitoring";
 import WarehouseReports from "./pages/warehouse/WarehouseReports";
@@ -26,7 +29,6 @@ import Installment from "./pages/prefinance/Installment";
 import InstallmentCreate from "./pages/prefinance/InstallmentCreate";
 import OutstandingFarmer from "./pages/prefinance/OutstandingFarmer";
 import Distribution from "./pages/prefinance/Distribution";
-import DistributionCreate from "./pages/prefinance/DistributionCreate";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import ProfitSharingPage from "./pages/ProfitSharing";
@@ -62,7 +64,9 @@ export const router = createBrowserRouter([
       { path: "warehouse/dashboard",           Component: WarehouseDashboardSimple },
       { path: "warehouse/stock-list",          Component: StockManagement },
       { path: "warehouse/stock-in",            Component: StockManagement },
-      { path: "warehouse/stock-out",           Component: StockManagement },
+      { path: "warehouse/stock-out",           Component: StockOutList },
+      { path: "warehouse/stock-out/create",    Component: StockOutCreate },
+      { path: "warehouse/stock-out/:id",       Component: StockOutView },
       // Legacy route kept for compatibility
       { path: "warehouse/stock-management",    Component: StockManagement },
       { path: "warehouse/stockin/create",      Component: StockInCreate },
@@ -80,7 +84,8 @@ export const router = createBrowserRouter([
       { path: "prefinance/installment",        Component: Installment },
       { path: "prefinance/installment/create", Component: InstallmentCreate },
       { path: "prefinance/distribution",       Component: Distribution },
-      { path: "prefinance/distribution/create",Component: DistributionCreate },
+      // Superseded by Stock Out; the old path is kept so existing links still work.
+      { path: "prefinance/distribution/create",Component: StockOutCreate },
       { path: "prefinance/outstanding",        Component: OutstandingFarmer },
 
       // ── Finance sub-pages ─────────────────────────────────────────────────

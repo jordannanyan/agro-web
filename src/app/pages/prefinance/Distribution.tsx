@@ -52,7 +52,8 @@ export default function Distribution() {
     <div className="space-y-6 pb-8">
       <div className="flex items-start justify-between">
         <div><h1 className="text-2xl text-slate-900 mb-1">Distribusi Pre-Finance</h1><p className="text-sm text-slate-500">Distribusi saprodi/biaya ke petani — tercatat sebagai utang</p></div>
-        <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/prefinance/distribution/create")}><Plus className="w-4 h-4 mr-2" />Tambah Distribusi</Button>
+        {/* Issuing goods is a warehouse act now — this page is the line-level record of it. */}
+        <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate("/warehouse/stock-out/create")}><Plus className="w-4 h-4 mr-2" />Buat Stock Out</Button>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
