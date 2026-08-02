@@ -6,11 +6,10 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
-import { EntityField } from "../../components/EntityField";
 
 interface BudgetCode { id: number; code: string; }
-interface PROption { id: number; pr_number: string; entity_id: number; grand_total: number; }
-interface POOption { id: number; po_number: string; entity_id: number; }
+interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; grand_total: number; }
+interface POOption { id: number; po_number: string; entity_id: number; entity_name?: string | null; }
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -25,7 +24,6 @@ export default function PaymentRequestCreate() {
   const [sourceType, setSourceType] = useState<"PO" | "PR">("PO");
   const [prId, setPrId] = useState("");
   const [poId, setPoId] = useState("");
-  const [entityId, setEntityId] = useState("");
   const [budgetCodeId, setBudgetCodeId] = useState("");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -49,7 +47,6 @@ export default function PaymentRequestCreate() {
         setSourceType(src as any);
         setPrId(p.purchase_request_id ? String(p.purchase_request_id) : "");
         setPoId(p.purchase_order_id ? String(p.purchase_order_id) : "");
-        setEntityId(String(p.entity_id ?? ""));
         setBudgetCodeId(p.budget_code_id ? String(p.budget_code_id) : "");
         setAmount(String(p.amount ?? ""));
         setReason(p.reason ?? "");
@@ -63,28 +60,27 @@ export default function PaymentRequestCreate() {
     })();
   }, [id]);
 
-  // Auto-fill entity from selected source.
+  // The entity is the source document's; the server reads it there when saving, so
+  // nothing is copied into form state. Only the amount is prefilled, as a suggestion.
+  const sourceEntityName = sourceType === "PR"
+    ? (prs || []).find((p) => String(p.id) === prId)?.entity_name ?? ""
+    : (pos || []).find((p) => String(p.id) === poId)?.entity_name ?? "";
+
   useEffect(() => {
     if (skipAutofill.current) { skipAutofill.current = false; return; }
-    if (sourceType === "PR" && prId) {
+    if (sourceType === "PR" && prId && !amount) {
       const pr = (prs || []).find((p) => String(p.id) === prId);
-      if (pr) { setEntityId(String(pr.entity_id)); if (!amount) setAmount(String(pr.grand_total ?? "")); }
-    }
-    if (sourceType === "PO" && poId) {
-      const po = (pos || []).find((p) => String(p.id) === poId);
-      if (po) setEntityId(String(po.entity_id));
+      if (pr) setAmount(String(pr.grand_total ?? ""));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prId, poId, sourceType]);
 
   async function submit(status: "Draft" | "Pending") {
-    if (!entityId) { toast.error("Entitas wajib"); return; }
     if (sourceType === "PR" && !prId) { toast.error("Pilih PR sumber"); return; }
     if (sourceType === "PO" && !poId) { toast.error("Pilih PO sumber"); return; }
     if (!budgetCodeId) { toast.error("Project Code wajib diisi"); return; }
     if (!(Number(amount) > 0)) { toast.error("Nominal harus > 0"); return; }
     const payload: any = {
-      entity_id: Number(entityId),
       purchase_request_id: sourceType === "PR" ? Number(prId) : null,
       purchase_order_id: sourceType === "PO" ? Number(poId) : null,
       budget_code_id: budgetCodeId ? Number(budgetCodeId) : null,
@@ -133,11 +129,11 @@ export default function PaymentRequestCreate() {
           </div>
           {sourceType === "PR" ? (
             <div><label className={label}>Pilih PR <span className="text-red-500">*</span></label>
-              <select value={prId} onChange={(e) => setPrId(e.target.value)} className={selectCls}><option value="">Pilih PR…</option>{(prs || []).map((p) => <option key={p.id} value={p.id}>{p.pr_number}</option>)}</select>
+              <select value={prId} onChange={(e) => setPrId(e.target.value)} className={selectCls}><option value="">Pilih PR…</option>{(prs || []).map((p) => <option key={p.id} value={p.id}>{p.pr_number}{p.entity_name ? ` · ${p.entity_name}` : ""}</option>)}</select>
             </div>
           ) : (
             <div><label className={label}>Pilih PO <span className="text-red-500">*</span></label>
-              <select value={poId} onChange={(e) => setPoId(e.target.value)} className={selectCls}><option value="">Pilih PO…</option>{(pos || []).map((p) => <option key={p.id} value={p.id}>{p.po_number}</option>)}</select>
+              <select value={poId} onChange={(e) => setPoId(e.target.value)} className={selectCls}><option value="">Pilih PO…</option>{(pos || []).map((p) => <option key={p.id} value={p.id}>{p.po_number}{p.entity_name ? ` · ${p.entity_name}` : ""}</option>)}</select>
             </div>
           )}
         </div>
@@ -146,7 +142,13 @@ export default function PaymentRequestCreate() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Detail Pembayaran</h2>
           <div className="grid grid-cols-2 gap-4">
-            <div><EntityField value={entityId} onChange={setEntityId} /></div>
+            {/* A PayReq always follows a PR or PO, so the entity is settled upstream. */}
+            <div>
+              <label className={label}>Entitas</label>
+              <div className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 text-slate-700 truncate">
+                {sourceEntityName || <span className="text-slate-400">mengikuti sumber yang dipilih</span>}
+              </div>
+            </div>
             <div><label className={label}>Project Code <span className="text-red-500">*</span></label>
               <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">— pilih —</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select>
             </div>
