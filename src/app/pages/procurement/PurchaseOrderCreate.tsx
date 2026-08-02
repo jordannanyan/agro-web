@@ -6,13 +6,12 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
-import { EntityField } from "../../components/EntityField";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface Vendor { id: number; vendor_name: string; }
 interface BudgetCode { id: number; code: string; }
-interface PROption { id: number; pr_number: string; entity_id: number; status: string; }
+interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; status: string; }
 interface POItem { key: string; pr_item_id: number | null; description: string; order_qty: string; unit_price: string; }
 interface Extra { key: string; description: string; amount: string; }
 
@@ -26,7 +25,6 @@ export default function PurchaseOrderCreate() {
   const { data: budgetCodes } = useApi<BudgetCode[]>("budget-codes");
   const { data: prs } = useApi<PROption[]>("purchase-requests", { status: "Approved" });
 
-  const [entityId, setEntityId] = useState("");
   const [prId, setPrId] = useState("");
   const [vendorId, setVendorId] = useState("");
   const [budgetCodeId, setBudgetCodeId] = useState("");
@@ -39,6 +37,9 @@ export default function PurchaseOrderCreate() {
   const [taxRate, setTaxRate] = useState("11");
   const [saving, setSaving] = useState(false);
 
+  // Shown instead of the removed picker: the entity of whichever PR is selected.
+  const prEntityName = (prs || []).find((p) => String(p.id) === prId)?.entity_name ?? "";
+
   const skipPrefill = useRef(false);
 
   // Edit mode: load existing PO into the form (skip PR auto-prefill).
@@ -48,7 +49,6 @@ export default function PurchaseOrderCreate() {
     (async () => {
       try {
         const po = await api.get<any>(`purchase-orders/${id}`);
-        setEntityId(String(po.entity_id ?? ""));
         setVendorId(String(po.vendor_id ?? ""));
         setPrId(po.purchase_request_id ? String(po.purchase_request_id) : "");
         setBudgetCodeId(po.budget_code_id ? String(po.budget_code_id) : "");
@@ -63,14 +63,14 @@ export default function PurchaseOrderCreate() {
     })();
   }, [id]);
 
-  // When a PR is chosen, prefill entity + load its items as PO item candidates.
+  // When a PR is chosen, load its items as PO item candidates. The entity is not
+  // copied into form state — the server reads it off the PR when saving.
   useEffect(() => {
     if (!prId) return;
     if (skipPrefill.current) { skipPrefill.current = false; return; }
     (async () => {
       try {
         const pr = await api.get<any>(`purchase-requests/${prId}`);
-        if (pr.entity_id) setEntityId(String(pr.entity_id));
         if (Array.isArray(pr.items) && pr.items.length) {
           setItems(pr.items.map((it: any) => ({
             key: rid(), pr_item_id: it.id, description: it.description,
@@ -92,13 +92,13 @@ export default function PurchaseOrderCreate() {
   const updExtra = (key: string, f: keyof Extra, v: string) => setExtras((p) => p.map((e) => (e.key === key ? { ...e, [f]: v } : e)));
 
   async function submit(status: "Draft" | "Pending") {
-    if (!vendorId || !entityId) { toast.error("Entitas & vendor wajib"); return; }
+    if (!prId) { toast.error("Sumber PR wajib dipilih — entitas PO mengikuti PR"); return; }
+    if (!vendorId) { toast.error("Vendor wajib dipilih"); return; }
     const validItems = items.filter((it) => parseFloat(it.order_qty) > 0);
     if (!validItems.length) { toast.error("Tambahkan minimal 1 item"); return; }
     const payload = {
-      entity_id: Number(entityId),
       vendor_id: Number(vendorId),
-      purchase_request_id: prId ? Number(prId) : null,
+      purchase_request_id: Number(prId),
       budget_code_id: budgetCodeId ? Number(budgetCodeId) : null,
       order_date: orderDate,
       due_date: dueDate || null,
@@ -137,14 +137,19 @@ export default function PurchaseOrderCreate() {
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Informasi Umum</h2>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="text-xs text-slate-500 font-medium mb-1.5 block">Sumber PR (opsional)</label>
+              <label className="text-xs text-slate-500 font-medium mb-1.5 block">Sumber PR <span className="text-red-500">*</span></label>
               <select value={prId} onChange={(e) => setPrId(e.target.value)} className={selectCls}>
-                <option value="">— tanpa PR —</option>
-                {(prs || []).map((p) => <option key={p.id} value={p.id}>{p.pr_number}</option>)}
+                <option value="">Pilih PR…</option>
+                {(prs || []).map((p) => <option key={p.id} value={p.id}>{p.pr_number}{p.entity_name ? ` · ${p.entity_name}` : ""}</option>)}
               </select>
             </div>
+            {/* Both routes into a PO start at a PR, so the PR settles which PT is
+                buying. Offering the choice again only invited the two to disagree. */}
             <div>
-              <EntityField value={entityId} onChange={setEntityId} />
+              <label className="text-xs text-slate-500 font-medium mb-1.5 block">Entitas</label>
+              <div className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm bg-slate-50 text-slate-700 truncate">
+                {prEntityName || <span className="text-slate-400">mengikuti PR yang dipilih</span>}
+              </div>
             </div>
             <div>
               <label className="text-xs text-slate-500 font-medium mb-1.5 block">Vendor <span className="text-red-500">*</span></label>
