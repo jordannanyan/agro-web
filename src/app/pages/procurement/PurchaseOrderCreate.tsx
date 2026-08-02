@@ -37,9 +37,6 @@ export default function PurchaseOrderCreate() {
   const [taxRate, setTaxRate] = useState("11");
   const [saving, setSaving] = useState(false);
 
-  // Shown instead of the removed picker: the entity of whichever PR is selected.
-  const prEntityName = (prs || []).find((p) => String(p.id) === prId)?.entity_name ?? "";
-
   const skipPrefill = useRef(false);
 
   // Edit mode: load existing PO into the form (skip PR auto-prefill).
@@ -143,14 +140,8 @@ export default function PurchaseOrderCreate() {
                 {(prs || []).map((p) => <option key={p.id} value={p.id}>{p.pr_number}{p.entity_name ? ` · ${p.entity_name}` : ""}</option>)}
               </select>
             </div>
-            {/* Both routes into a PO start at a PR, so the PR settles which PT is
-                buying. Offering the choice again only invited the two to disagree. */}
-            <div>
-              <label className="text-xs text-slate-500 font-medium mb-1.5 block">Entitas</label>
-              <div className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm bg-slate-50 text-slate-700 truncate">
-                {prEntityName || <span className="text-slate-400">mengikuti PR yang dipilih</span>}
-              </div>
-            </div>
+            {/* No entity field at all: both routes into a PO start at a PR, so the PR
+                settles which PT is buying, and the PR dropdown above already prints it. */}
             <div>
               <label className="text-xs text-slate-500 font-medium mb-1.5 block">Vendor <span className="text-red-500">*</span></label>
               <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className={selectCls}>

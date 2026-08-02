@@ -60,12 +60,8 @@ export default function PaymentRequestCreate() {
     })();
   }, [id]);
 
-  // The entity is the source document's; the server reads it there when saving, so
-  // nothing is copied into form state. Only the amount is prefilled, as a suggestion.
-  const sourceEntityName = sourceType === "PR"
-    ? (prs || []).find((p) => String(p.id) === prId)?.entity_name ?? ""
-    : (pos || []).find((p) => String(p.id) === poId)?.entity_name ?? "";
-
+  // The entity is the source document's and the server reads it there when saving,
+  // so the form never holds it. Only the amount is prefilled, as a suggestion.
   useEffect(() => {
     if (skipAutofill.current) { skipAutofill.current = false; return; }
     if (sourceType === "PR" && prId && !amount) {
@@ -142,13 +138,8 @@ export default function PaymentRequestCreate() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Detail Pembayaran</h2>
           <div className="grid grid-cols-2 gap-4">
-            {/* A PayReq always follows a PR or PO, so the entity is settled upstream. */}
-            <div>
-              <label className={label}>Entitas</label>
-              <div className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 text-slate-700 truncate">
-                {sourceEntityName || <span className="text-slate-400">mengikuti sumber yang dipilih</span>}
-              </div>
-            </div>
+            {/* No entity field: a PayReq always follows a PR or PO, which settles it,
+                and the source dropdown above already prints that entity. */}
             <div><label className={label}>Project Code <span className="text-red-500">*</span></label>
               <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">— pilih —</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select>
             </div>
