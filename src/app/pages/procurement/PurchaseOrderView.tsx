@@ -1,16 +1,16 @@
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, ShoppingCart, Pencil } from "lucide-react";
+import { ArrowLeft, ShoppingCart } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
-import { Button } from "../../components/ui/button";
 import { useApi } from "../../lib/hooks";
 import { ApprovalTimeline, ApprovalStep } from "../../components/ApprovalTimeline";
 import { DocumentAttachments } from "../../components/DocumentAttachments";
+import { DocumentActions, RevisionBanner } from "../../components/DocumentActions";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface PODetail {
-  id: number; po_number: string; vendor_name: string; entity_name: string; budget_code: string | null;
+  id: number; po_number: string; vendor_name: string; entity_id: number | null; entity_name: string; budget_code: string | null;
   pr_number: string | null; order_date: string; due_date: string | null; payment_terms: string | null; status: string;
   items: { id: number; pr_item_description: string | null; order_qty: number; unit_price: number; total: number }[];
   extra_costs: { id: number; description: string; amount: number }[];
@@ -28,8 +28,12 @@ function statusBadge(status: string) {
 export default function PurchaseOrderView() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { data, loading, error } = useApi<PODetail>(id ? `purchase-orders/${id}` : null, undefined, [id]);
+  const { data, loading, error, refetch } = useApi<PODetail>(id ? `purchase-orders/${id}` : null, undefined, [id]);
   const { data: approvals, refetch: refetchAppr } = useApi<ApprovalStep[]>(id ? `documents/PO/${id}/approvals` : null, undefined, [id]);
+
+  // The order and its chain are separate requests here, and every action changes
+  // both — an approval moves the steps and the PO's own status with them.
+  const reload = () => { refetch(); refetchAppr(); };
 
   return (
     <div className="min-h-screen bg-[#FAFBFC] -mx-8 -my-8">
@@ -43,9 +47,7 @@ export default function PurchaseOrderView() {
           {data && (
             <div className="ml-auto flex items-center gap-3">
               <Badge className={`border ${statusBadge(data.status)}`}>{data.status}</Badge>
-              {data.status === "Draft" && (
-                <Button size="sm" variant="outline" onClick={() => navigate(`/procurement/po/${data.id}/edit`)}><Pencil className="w-4 h-4 mr-1.5" />Edit</Button>
-              )}
+              <DocumentActions docType="PO" doc={data} approvals={approvals} onChanged={reload} />
             </div>
           )}
         </div>
@@ -56,6 +58,8 @@ export default function PurchaseOrderView() {
         {error && <div className="text-center text-red-500 py-16 text-sm">{error}</div>}
         {data && (
           <>
+            <RevisionBanner docType="PO" doc={data} approvals={approvals} />
+
             <Card className="p-6">
               <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Informasi</h2>
               <div className="grid grid-cols-4 gap-4">
@@ -113,7 +117,7 @@ export default function PurchaseOrderView() {
 
             <Card className="p-6">
               <h2 className="text-slate-900 font-semibold mb-4">Alur Approval</h2>
-              <ApprovalTimeline docType="PO" docId={data.id} steps={approvals || []} onChanged={refetchAppr} />
+              <ApprovalTimeline docType="PO" docId={data.id} steps={approvals || []} onChanged={reload} />
             </Card>
 
             <Card className="p-6">

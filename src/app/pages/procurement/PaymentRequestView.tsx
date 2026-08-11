@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, CreditCard, Pencil, Banknote } from "lucide-react";
+import { ArrowLeft, CreditCard, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
@@ -11,11 +11,12 @@ import { useAuth } from "../../store/AuthContext";
 import { canRecordPayment } from "../../lib/permissions";
 import { ApprovalTimeline, ApprovalStep } from "../../components/ApprovalTimeline";
 import { DocumentAttachments } from "../../components/DocumentAttachments";
+import { DocumentActions, RevisionBanner } from "../../components/DocumentActions";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface PayDetail {
-  id: number; payreq_number: string; entity_name: string; budget_code: string | null;
+  id: number; payreq_number: string; entity_id: number | null; entity_name: string; budget_code: string | null;
   pr_number: string | null; po_number: string | null; route: string;
   amount: number; reason: string | null; person_in_charge: string | null;
   activity_date: string | null; estimated_pay_date: string | null; status: string;
@@ -84,9 +85,7 @@ export default function PaymentRequestView() {
           {data && (
             <div className="ml-auto flex items-center gap-3">
               <Badge className={`border ${statusBadge(data.status)}`}>{data.status}</Badge>
-              {data.status === "Draft" && (
-                <Button size="sm" variant="outline" onClick={() => navigate(`/procurement/payreq/${data.id}/edit`)}><Pencil className="w-4 h-4 mr-1.5" />Edit</Button>
-              )}
+              <DocumentActions docType="PayReq" doc={data} approvals={data.approvals} onChanged={refetch} />
             </div>
           )}
         </div>
@@ -97,6 +96,8 @@ export default function PaymentRequestView() {
         {error && <div className="text-center text-red-500 py-16 text-sm">{error}</div>}
         {data && (
           <>
+            <RevisionBanner docType="PayReq" doc={data} approvals={data.approvals} />
+
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Informasi</h2>

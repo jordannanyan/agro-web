@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, FileText, Plus, Trash2, Save, Send } from "lucide-react";
+import { ArrowLeft, FileText, Plus, Trash2, Save, Send, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -38,6 +38,11 @@ export default function PurchaseRequestCreate() {
   const [dateRequired, setDateRequired] = useState("");
   const [items, setItems] = useState<Item[]>([newItem()]);
   const [saving, setSaving] = useState(false);
+  // Editing a request an approver sent back is a different act from finishing a
+  // draft: the status must survive the save, and the way out is "resubmit", not
+  // "submit for the first time".
+  const [docStatus, setDocStatus] = useState<string | null>(null);
+  const isRevision = docStatus === "Revision";
 
   // Edit mode: load existing PR into the form.
   useEffect(() => {
@@ -45,6 +50,7 @@ export default function PurchaseRequestCreate() {
     (async () => {
       try {
         const pr = await api.get<any>(`purchase-requests/${id}`);
+        setDocStatus(pr.status ?? null);
         setEntityId(String(pr.entity_id ?? ""));
         if (pr.request_date) setRequestDate(String(pr.request_date).slice(0, 10));
         setDateRequired(pr.date_required ? String(pr.date_required).slice(0, 10) : "");
@@ -72,7 +78,9 @@ export default function PurchaseRequestCreate() {
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, [field]: value } : it)));
   }
 
-  async function submit(status: "Draft" | "Pending") {
+  // "keep" saves the changes without touching the status — used while a request
+  // is in revision, where moving it back to Draft would strand the approval chain.
+  async function submit(status: "Draft" | "Pending" | "keep") {
     if (!entityId) { toast.error("Pilih entitas"); return; }
     const validItems = items.filter((it) => it.description.trim() && parseFloat(it.quantity) > 0);
     if (validItems.length === 0) { toast.error("Tambahkan minimal 1 item dengan deskripsi & qty"); return; }
@@ -80,7 +88,7 @@ export default function PurchaseRequestCreate() {
       entity_id: Number(entityId),
       request_date: requestDate,
       date_required: dateRequired || null,
-      status,
+      ...(status === "keep" ? {} : { status }),
       items: validItems.map((it) => ({
         budget_code_id: it.budget_code_id ? Number(it.budget_code_id) : null,
         sapropdi_id: it.sapropdi_id ? Number(it.sapropdi_id) : null,
@@ -95,7 +103,11 @@ export default function PurchaseRequestCreate() {
       const res = isEdit
         ? await api.put<any>(`purchase-requests/${id}`, payload)
         : await api.post<any>("purchase-requests", payload);
-      toast.success(status === "Draft" ? "PR disimpan sebagai draft" : "PR diajukan untuk approval");
+      toast.success(
+        status === "Draft" ? "PR disimpan sebagai draft"
+          : status === "keep" ? "Perubahan revisi disimpan"
+          : isRevision ? "PR dikirim ulang untuk approval"
+          : "PR diajukan untuk approval");
       navigate(`/procurement/pr/${isEdit ? id : res.id}`);
     } catch (e: any) {
       toast.error(e?.message || "Gagal menyimpan PR");
@@ -111,7 +123,10 @@ export default function PurchaseRequestCreate() {
           <button onClick={() => navigate("/procurement/purchase-request")} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center"><FileText className="w-4 h-4 text-white" /></div>
-            <div><h1 className="text-slate-900 font-semibold text-lg">{isEdit ? "Edit" : "Buat"} Purchase Request</h1><p className="text-slate-500 text-sm">Procurement → PR</p></div>
+            <div>
+              <h1 className="text-slate-900 font-semibold text-lg">{isRevision ? "Revisi" : isEdit ? "Edit" : "Buat"} Purchase Request</h1>
+              <p className="text-slate-500 text-sm">Procurement → PR</p>
+            </div>
           </div>
         </div>
       </div>
@@ -181,8 +196,17 @@ export default function PurchaseRequestCreate() {
         <div className="flex items-center justify-between pb-8">
           <button onClick={() => navigate("/procurement/purchase-request")} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => submit("Draft")} disabled={saving}><Save className="w-4 h-4 mr-2" />Simpan Draft</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => submit("Pending")} disabled={saving}><Send className="w-4 h-4 mr-2" />{saving ? "Menyimpan…" : "Ajukan Approval"}</Button>
+            {isRevision ? (
+              <>
+                <Button variant="outline" onClick={() => submit("keep")} disabled={saving}><Save className="w-4 h-4 mr-2" />Simpan Perubahan</Button>
+                <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={() => submit("Pending")} disabled={saving}><RotateCcw className="w-4 h-4 mr-2" />{saving ? "Menyimpan…" : "Simpan & Kirim Ulang"}</Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => submit("Draft")} disabled={saving}><Save className="w-4 h-4 mr-2" />Simpan Draft</Button>
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => submit("Pending")} disabled={saving}><Send className="w-4 h-4 mr-2" />{saving ? "Menyimpan…" : "Ajukan Approval"}</Button>
+              </>
+            )}
           </div>
         </div>
       </div>

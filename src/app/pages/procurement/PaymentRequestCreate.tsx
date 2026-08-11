@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, CreditCard, Save, Send } from "lucide-react";
+import { ArrowLeft, CreditCard, Save, Send, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -34,6 +34,10 @@ export default function PaymentRequestCreate() {
   const [bankAccount, setBankAccount] = useState("");
   const [beneficiary, setBeneficiary] = useState("");
   const [saving, setSaving] = useState(false);
+  // See the PR form: a revision keeps its status when saved, and leaves through
+  // "resubmit" rather than a first submission.
+  const [docStatus, setDocStatus] = useState<string | null>(null);
+  const isRevision = docStatus === "Revision";
   const skipAutofill = useRef(false);
 
   // Edit mode: load existing PayReq.
@@ -43,6 +47,7 @@ export default function PaymentRequestCreate() {
     (async () => {
       try {
         const p = await api.get<any>(`payment-requests/${id}`);
+        setDocStatus(p.status ?? null);
         const src = p.purchase_order_id ? "PO" : "PR";
         setSourceType(src as any);
         setPrId(p.purchase_request_id ? String(p.purchase_request_id) : "");
@@ -71,7 +76,8 @@ export default function PaymentRequestCreate() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prId, poId, sourceType]);
 
-  async function submit(status: "Draft" | "Pending") {
+  // "keep" saves without touching the status — see the PR form.
+  async function submit(status: "Draft" | "Pending" | "keep") {
     if (sourceType === "PR" && !prId) { toast.error("Pilih PR sumber"); return; }
     if (sourceType === "PO" && !poId) { toast.error("Pilih PO sumber"); return; }
     if (!budgetCodeId) { toast.error("Project Code wajib diisi"); return; }
@@ -85,12 +91,16 @@ export default function PaymentRequestCreate() {
       activity_date: activityDate || null,
       estimated_pay_date: estPayDate || null,
       bank_name: bankName, bank_account: bankAccount, beneficiary_name: beneficiary,
-      status,
+      ...(status === "keep" ? {} : { status }),
     };
     setSaving(true);
     try {
       const res = isEdit ? await api.put<any>(`payment-requests/${id}`, payload) : await api.post<any>("payment-requests", payload);
-      toast.success(status === "Draft" ? "PayReq disimpan draft" : "PayReq diajukan approval");
+      toast.success(
+        status === "Draft" ? "PayReq disimpan draft"
+          : status === "keep" ? "Perubahan revisi disimpan"
+          : isRevision ? "PayReq dikirim ulang untuk approval"
+          : "PayReq diajukan approval");
       navigate(`/procurement/payreq/${isEdit ? id : res.id}`);
     } catch (e: any) { toast.error(e?.message || "Gagal menyimpan PayReq"); }
     finally { setSaving(false); }
@@ -106,7 +116,10 @@ export default function PaymentRequestCreate() {
           <button onClick={() => navigate("/procurement/payment-request")} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center"><CreditCard className="w-4 h-4 text-white" /></div>
-            <div><h1 className="text-slate-900 font-semibold text-lg">{isEdit ? "Edit" : "Buat"} Payment Request</h1><p className="text-slate-500 text-sm">Procurement → PayReq</p></div>
+            <div>
+              <h1 className="text-slate-900 font-semibold text-lg">{isRevision ? "Revisi" : isEdit ? "Edit" : "Buat"} Payment Request</h1>
+              <p className="text-slate-500 text-sm">Procurement → PayReq</p>
+            </div>
           </div>
         </div>
       </div>
@@ -173,8 +186,17 @@ export default function PaymentRequestCreate() {
         <div className="flex items-center justify-between pb-8">
           <button onClick={() => navigate("/procurement/payment-request")} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => submit("Draft")} disabled={saving}><Save className="w-4 h-4 mr-2" />Simpan Draft</Button>
-            <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => submit("Pending")} disabled={saving}><Send className="w-4 h-4 mr-2" />{saving ? "Menyimpan…" : "Ajukan Approval"}</Button>
+            {isRevision ? (
+              <>
+                <Button variant="outline" onClick={() => submit("keep")} disabled={saving}><Save className="w-4 h-4 mr-2" />Simpan Perubahan</Button>
+                <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={() => submit("Pending")} disabled={saving}><RotateCcw className="w-4 h-4 mr-2" />{saving ? "Menyimpan…" : "Simpan & Kirim Ulang"}</Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => submit("Draft")} disabled={saving}><Save className="w-4 h-4 mr-2" />Simpan Draft</Button>
+                <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => submit("Pending")} disabled={saving}><Send className="w-4 h-4 mr-2" />{saving ? "Menyimpan…" : "Ajukan Approval"}</Button>
+              </>
+            )}
           </div>
         </div>
       </div>

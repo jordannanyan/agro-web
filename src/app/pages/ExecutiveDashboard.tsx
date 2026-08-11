@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import {
   DollarSign, TrendingUp, Users, Sprout, ShoppingCart, Factory,
-  AlertTriangle, ArrowRight, FileText, CreditCard,
+  AlertTriangle, ArrowRight, FileText, CreditCard, Building2,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -9,8 +9,12 @@ import {
 import { Link } from "react-router";
 import { Card } from "../components/ui/card";
 import { useApi } from "../lib/hooks";
+import { useAuth } from "../store/AuthContext";
+import { isEntityBound } from "../lib/permissions";
 
 interface DashboardData {
+  /** Which entity these figures cover; all_entities when the viewer sees every PT. */
+  scope?: { entity_id: number | null; all_entities: boolean };
   kpis: {
     farmers: number; plots: number;
     purchasing_qty: number; purchasing_value: number;
@@ -38,7 +42,9 @@ const SCHEME_META: Record<string, { label: string; cls: string; bar: string }> =
 
 export default function ExecutiveDashboard() {
   const { data, loading, error } = useApi<DashboardData>("dashboard/executive");
+  const { user } = useAuth();
   const k = data?.kpis;
+  const bound = isEntityBound(user);
 
   const trend = useMemo(
     () => (data?.trend || []).map((t) => ({
@@ -71,6 +77,14 @@ export default function ExecutiveDashboard() {
       <div>
         <h1 className="text-2xl text-slate-900 mb-1">Executive Dashboard</h1>
         <p className="text-sm text-slate-500">Ringkasan operasional lintas modul — data real-time</p>
+        {/* The figures are entity-scoped, so the page says whose they are. */}
+        <span className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+          bound ? "bg-slate-50 text-slate-600 border-slate-200" : "bg-indigo-50 text-indigo-700 border-indigo-200"}`}>
+          <Building2 className="w-3.5 h-3.5" />
+          {bound
+            ? `Data ${user?.entity?.entities_name || `Entity #${user?.entity_id}`}`
+            : "Gabungan semua entitas"}
+        </span>
       </div>
 
       {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>}

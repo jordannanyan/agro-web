@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, ShoppingCart, Plus, Trash2, Save, Send } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Plus, Trash2, Save, Send, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -36,6 +36,10 @@ export default function PurchaseOrderCreate() {
   const [includeTax, setIncludeTax] = useState(false);
   const [taxRate, setTaxRate] = useState("11");
   const [saving, setSaving] = useState(false);
+  // See the PR form: a revision keeps its status when saved, and leaves through
+  // "resubmit" rather than a first submission.
+  const [docStatus, setDocStatus] = useState<string | null>(null);
+  const isRevision = docStatus === "Revision";
 
   const skipPrefill = useRef(false);
 
@@ -46,6 +50,7 @@ export default function PurchaseOrderCreate() {
     (async () => {
       try {
         const po = await api.get<any>(`purchase-orders/${id}`);
+        setDocStatus(po.status ?? null);
         setVendorId(String(po.vendor_id ?? ""));
         setPrId(po.purchase_request_id ? String(po.purchase_request_id) : "");
         setBudgetCodeId(po.budget_code_id ? String(po.budget_code_id) : "");
@@ -88,7 +93,8 @@ export default function PurchaseOrderCreate() {
   const upd = (key: string, f: keyof POItem, v: string) => setItems((p) => p.map((it) => (it.key === key ? { ...it, [f]: v } : it)));
   const updExtra = (key: string, f: keyof Extra, v: string) => setExtras((p) => p.map((e) => (e.key === key ? { ...e, [f]: v } : e)));
 
-  async function submit(status: "Draft" | "Pending") {
+  // "keep" saves without touching the status — see the PR form.
+  async function submit(status: "Draft" | "Pending" | "keep") {
     if (!prId) { toast.error("Sumber PR wajib dipilih — entitas PO mengikuti PR"); return; }
     if (!vendorId) { toast.error("Vendor wajib dipilih"); return; }
     const validItems = items.filter((it) => parseFloat(it.order_qty) > 0);
@@ -102,14 +108,18 @@ export default function PurchaseOrderCreate() {
       payment_terms: terms || null,
       is_tax_included: includeTax,
       tax_rate: Number(taxRate) || 0,
-      status,
+      ...(status === "keep" ? {} : { status }),
       items: validItems.map((it) => ({ pr_item_id: it.pr_item_id, order_qty: Number(it.order_qty), unit_price: Number(it.unit_price) || 0 })),
       extra_costs: extras.filter((e) => e.description || e.amount).map((e) => ({ description: e.description, amount: Number(e.amount) || 0 })),
     };
     setSaving(true);
     try {
       const res = isEdit ? await api.put<any>(`purchase-orders/${id}`, payload) : await api.post<any>("purchase-orders", payload);
-      toast.success(status === "Draft" ? "PO disimpan draft" : "PO diajukan approval");
+      toast.success(
+        status === "Draft" ? "PO disimpan draft"
+          : status === "keep" ? "Perubahan revisi disimpan"
+          : isRevision ? "PO dikirim ulang untuk approval"
+          : "PO diajukan approval");
       navigate(`/procurement/po/${isEdit ? id : res.id}`);
     } catch (e: any) { toast.error(e?.message || "Gagal menyimpan PO"); }
     finally { setSaving(false); }
@@ -124,7 +134,10 @@ export default function PurchaseOrderCreate() {
           <button onClick={() => navigate("/procurement/purchase-order")} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center"><ShoppingCart className="w-4 h-4 text-white" /></div>
-            <div><h1 className="text-slate-900 font-semibold text-lg">{isEdit ? "Edit" : "Buat"} Purchase Order</h1><p className="text-slate-500 text-sm">Procurement → PO</p></div>
+            <div>
+              <h1 className="text-slate-900 font-semibold text-lg">{isRevision ? "Revisi" : isEdit ? "Edit" : "Buat"} Purchase Order</h1>
+              <p className="text-slate-500 text-sm">Procurement → PO</p>
+            </div>
           </div>
         </div>
       </div>
@@ -219,8 +232,17 @@ export default function PurchaseOrderCreate() {
         <div className="flex items-center justify-between pb-8">
           <button onClick={() => navigate("/procurement/purchase-order")} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => submit("Draft")} disabled={saving}><Save className="w-4 h-4 mr-2" />Simpan Draft</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => submit("Pending")} disabled={saving}><Send className="w-4 h-4 mr-2" />{saving ? "Menyimpan…" : "Ajukan Approval"}</Button>
+            {isRevision ? (
+              <>
+                <Button variant="outline" onClick={() => submit("keep")} disabled={saving}><Save className="w-4 h-4 mr-2" />Simpan Perubahan</Button>
+                <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={() => submit("Pending")} disabled={saving}><RotateCcw className="w-4 h-4 mr-2" />{saving ? "Menyimpan…" : "Simpan & Kirim Ulang"}</Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => submit("Draft")} disabled={saving}><Save className="w-4 h-4 mr-2" />Simpan Draft</Button>
+                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => submit("Pending")} disabled={saving}><Send className="w-4 h-4 mr-2" />{saving ? "Menyimpan…" : "Ajukan Approval"}</Button>
+              </>
+            )}
           </div>
         </div>
       </div>

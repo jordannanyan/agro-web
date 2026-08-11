@@ -1,16 +1,17 @@
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, FileText, Pencil } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
-import { Button } from "../../components/ui/button";
 import { useApi } from "../../lib/hooks";
 import { ApprovalTimeline, ApprovalStep } from "../../components/ApprovalTimeline";
 import { DocumentAttachments } from "../../components/DocumentAttachments";
+import { DocumentActions, RevisionBanner } from "../../components/DocumentActions";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface PRDetail {
-  id: number; pr_number: string; entity_name: string; request_date: string; date_required: string | null;
+  id: number; pr_number: string; entity_id: number | null; entity_name: string;
+  request_date: string; date_required: string | null;
   status: string; grand_total: number; requested_by_name: string | null;
   items: { id: number; description: string; budget_code: string | null; unit_name: string | null; quantity: number; unit_cost: number; total_cost: number; sapropdi_name: string | null }[];
   approvals: ApprovalStep[];
@@ -45,9 +46,7 @@ export default function PurchaseRequestView() {
           {data && (
             <div className="ml-auto flex items-center gap-3">
               <Badge className={`border ${statusBadge(data.status)}`}>{data.status}</Badge>
-              {data.status === "Draft" && (
-                <Button size="sm" variant="outline" onClick={() => navigate(`/procurement/pr/${data.id}/edit`)}><Pencil className="w-4 h-4 mr-1.5" />Edit</Button>
-              )}
+              <DocumentActions docType="PR" doc={data} approvals={data.approvals} onChanged={refetch} />
             </div>
           )}
         </div>
@@ -58,6 +57,8 @@ export default function PurchaseRequestView() {
         {error && <div className="text-center text-red-500 py-16 text-sm">{error}</div>}
         {data && (
           <>
+            <RevisionBanner docType="PR" doc={data} approvals={data.approvals} />
+
             <Card className="p-6">
               <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Informasi</h2>
               <div className="grid grid-cols-4 gap-4">

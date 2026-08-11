@@ -1,5 +1,6 @@
-import { Clock, UserCheck } from "lucide-react";
+import { Clock, UserCheck, RotateCcw } from "lucide-react";
 import { useAuth } from "../store/AuthContext";
+import { requesterRoleOf, type DocType } from "../lib/permissions";
 
 // "Pending" on its own says a document is stuck without saying on whom, so every
 // row looked equally inert and nobody could tell which ones were theirs. The list
@@ -27,9 +28,21 @@ function statusClass(status: string) {
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
-export function DocumentStatus({ row }: { row: PendingInfo }) {
+export function DocumentStatus({ row, docType }: { row: PendingInfo; docType?: DocType }) {
   const { user } = useAuth();
   const waiting = (row.status || "").toLowerCase().includes("pending");
+
+  // A document sent back for revision has no pending step — every step has been
+  // actioned — so it used to render as an inert grey badge and the requester had
+  // no way of telling that the ball was in their court.
+  if (docType && isMyRevision(row, docType, user?.role_code)) {
+    return (
+      <span title="Dikembalikan untuk revisi — perbaiki lalu kirim ulang"
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border bg-violet-600 text-white border-violet-600 ring-2 ring-violet-200">
+        <RotateCcw className="w-3 h-3" />Perlu revisi Anda
+      </span>
+    );
+  }
 
   if (!waiting || !row.pending_role_name) {
     return (
@@ -62,4 +75,14 @@ export function DocumentStatus({ row }: { row: PendingInfo }) {
 export function isMyTurn(row: PendingInfo, roleCode?: string | null) {
   return (row.status || "").toLowerCase().includes("pending")
     && !!row.pending_role_code && row.pending_role_code === roleCode;
+}
+
+/**
+ * True when the document was sent back for revision and the viewer's role is the
+ * one that files this kind of document — a display hint only; who may actually
+ * resubmit is decided by the API against the document's own approval chain.
+ */
+export function isMyRevision(row: PendingInfo, docType: DocType, roleCode?: string | null) {
+  return (row.status || "").toLowerCase().includes("revis")
+    && !!roleCode && roleCode === requesterRoleOf(docType);
 }
