@@ -15,6 +15,7 @@ import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { useApi } from "../../lib/hooks";
+import { EntityScopeBar } from "../../components/EntityScope";
 
 // API /warehouse-stock/reorder → ReorderItem shape.
 interface ApiReorder {
@@ -249,6 +250,7 @@ export default function ReorderMonitoring() {
           <p className="text-sm text-slate-500 ml-14">
             Monitor items below minimum stock and create purchase requests
           </p>
+          <EntityScopeBar className="ml-14 mt-2" />
         </div>
         <Button
           className="bg-emerald-500 hover:bg-emerald-600 text-white"

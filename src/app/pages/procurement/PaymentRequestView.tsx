@@ -12,12 +12,14 @@ import { canRecordPayment } from "../../lib/permissions";
 import { ApprovalTimeline, ApprovalStep } from "../../components/ApprovalTimeline";
 import { DocumentAttachments } from "../../components/DocumentAttachments";
 import { DocumentActions, RevisionBanner } from "../../components/DocumentActions";
+import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface PayDetail {
   id: number; payreq_number: string; entity_id: number | null; entity_name: string; budget_code: string | null;
   pr_number: string | null; po_number: string | null; route: string;
+  purchase_request_id: number | null; purchase_order_id: number | null;
   amount: number; reason: string | null; person_in_charge: string | null;
   activity_date: string | null; estimated_pay_date: string | null; status: string;
   released_pay_date: string | null;
@@ -127,6 +129,13 @@ export default function PaymentRequestView() {
                 <p className="text-xs text-slate-400 mt-3">Rekening: {data.bank_name} · {data.bank_account} · a.n. {data.beneficiary_name || "—"}</p>
               )}
             </Card>
+
+            {/* An approver signing off cash should be able to see the goods without
+                leaving the page. */}
+            <SourceDocumentPreview
+              docType={data.purchase_order_id ? "PO" : "PR"}
+              docId={data.purchase_order_id || data.purchase_request_id}
+            />
 
             <Card className="p-6">
               <h2 className="text-slate-900 font-semibold mb-4">Alur Approval</h2>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import {
-  ShoppingCart, FileText, CreditCard, Plus, Eye, Search, Trash2, ChevronRight, ArrowRight, Building2, RotateCcw,
+  ShoppingCart, FileText, CreditCard, Plus, Eye, Search, Trash2, ChevronRight, ArrowRight, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../components/ui/card";
@@ -10,39 +10,15 @@ import { Input } from "../components/ui/input";
 import { api } from "../lib/api";
 import { useApi } from "../lib/hooks";
 import { useAuth } from "../store/AuthContext";
-import { isEntityBound, type DocType } from "../lib/permissions";
+import { isEntityBound, canDeleteDocument, type DocType } from "../lib/permissions";
 import { DocumentStatus, isMyTurn, isMyRevision, type PendingInfo } from "../components/DocumentStatus";
+import { EntityScopeBar, EntityTag } from "../components/EntityScope";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
-interface EntityRow { id: number; entities_name: string }
 interface PRRow extends PendingInfo { id: number; pr_number: string; entity_id: number | null; entity_name: string; request_date: string; date_required: string | null; status: string; grand_total: number; requested_by_name: string | null; }
 interface PORow extends PendingInfo { id: number; po_number: string; entity_id: number | null; entity_name: string; pr_number: string | null; vendor_name: string; status: string; order_date: string; }
 interface PayRow extends PendingInfo { id: number; payreq_number: string; entity_id: number | null; entity_name: string; pr_number: string | null; po_number: string | null; route: string; amount: number; estimated_pay_date: string | null; status: string; }
-
-// Short label for an entity: the tables are dense and the legal names are long
-// ("PT Java Nature Based Solutions (JNBS)"), so the acronym in the name carries it.
-function entityShort(name?: string | null): string {
-  if (!name) return "—";
-  const acronym = name.match(/\(([^)]+)\)\s*$/);
-  return acronym ? acronym[1] : name;
-}
-
-/**
- * Which PT a row belongs to.
- *
- * Only shown to accounts that see more than one — the NBSV administrators and the
- * cross-entity roles. For a Field Admin or Project Manager every row is their own
- * PT by construction, so the column would be a wasted one.
- */
-function EntityTag({ row }: { row: { entity_name?: string | null } }) {
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border bg-slate-50 text-slate-600 border-slate-200"
-      title={row.entity_name || undefined}>
-      <Building2 className="w-3 h-3 text-slate-400" />{entityShort(row.entity_name)}
-    </span>
-  );
-}
 
 // A row awaiting the viewer is tinted across its whole width — the badge alone is
 // easy to miss when a table runs long. Revisions get their own tint: they are the
@@ -96,7 +72,6 @@ export default function Procurement() {
   // rows are tagged with the entity and they get a filter to narrow it down.
   const bound = isEntityBound(user);
   const [entityFilter, setEntityFilter] = useState("");
-  const { data: entities } = useApi<EntityRow[]>(bound ? null : "entities");
   const scopeQuery = entityFilter ? { entity_id: entityFilter } : undefined;
 
   const { data: prs, refetch: refetchPR } = useApi<PRRow[]>("purchase-requests", scopeQuery);
@@ -136,31 +111,7 @@ export default function Procurement() {
           <p className="text-sm text-slate-500">Fairventures Agroforestry · Integrated Procurement Workflow</p>
           {/* Never leave it ambiguous whose data is on screen. */}
           <div className="flex items-center gap-2 mt-2">
-            {bound ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border bg-slate-50 text-slate-600 border-slate-200">
-                <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                Data {user?.entity?.entities_name || `Entity #${user?.entity_id}`}
-              </span>
-            ) : (
-              <>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200">
-                  <Building2 className="w-3.5 h-3.5" />
-                  {entityFilter
-                    ? entities?.find((e) => String(e.id) === entityFilter)?.entities_name || "Entitas terpilih"
-                    : "Semua entitas"}
-                </span>
-                <select
-                  value={entityFilter}
-                  onChange={(e) => setEntityFilter(e.target.value)}
-                  className="border border-slate-200 rounded-lg px-2 py-1 text-xs bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                >
-                  <option value="">Semua entitas</option>
-                  {(entities || []).map((e) => (
-                    <option key={e.id} value={e.id}>{e.entities_name}</option>
-                  ))}
-                </select>
-              </>
-            )}
+            <EntityScopeBar value={entityFilter} onChange={setEntityFilter} />
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -222,7 +173,7 @@ export default function Procurement() {
                   {prList.filter((pr) => searchQuery === "" || pr.pr_number.toLowerCase().includes(searchQuery.toLowerCase())).map((pr) => (
                     <tr key={pr.id} className={`border-b border-slate-50 ${rowClass(pr, "PR", user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-blue-700">{pr.pr_number}</td>
-                      {!bound && <td className="py-4 px-6"><EntityTag row={pr} /></td>}
+                      {!bound && <td className="py-4 px-6"><EntityTag name={pr.entity_name} /></td>}
                       <td className="py-4 px-6 text-sm text-slate-600">{pr.request_date}</td>
                       <td className="py-4 px-6 text-sm text-slate-600">{pr.date_required || "—"}</td>
                       <td className="py-4 px-6 text-sm font-mono text-slate-900 text-right">{fmtRp(pr.grand_total)}</td>
@@ -230,7 +181,11 @@ export default function Procurement() {
                       <td className="py-4 px-6 text-sm text-slate-600">{pr.requested_by_name || "—"}</td>
                       <td className="py-4 px-6"><div className="flex items-center justify-end gap-1">
                         <Button size="sm" variant="ghost" onClick={() => navigate(`/procurement/pr/${pr.id}`)}><Eye className="w-4 h-4" /></Button>
-                        <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-600" onClick={() => del("pr", pr.id)}><Trash2 className="w-4 h-4" /></Button>
+                        {/* Only a draft of one's own may go. The API refuses the rest;
+                            showing the button anyway would just promise otherwise. */}
+                        {canDeleteDocument(user, "PR", pr) && (
+                          <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-600" onClick={() => del("pr", pr.id)}><Trash2 className="w-4 h-4" /></Button>
+                        )}
                       </div></td>
                     </tr>
                   ))}
@@ -256,7 +211,7 @@ export default function Procurement() {
                   {poList.map((po) => (
                     <tr key={po.id} className={`border-b border-slate-50 ${rowClass(po, "PO", user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-emerald-700">{po.po_number}</td>
-                      {!bound && <td className="py-4 px-6"><EntityTag row={po} /></td>}
+                      {!bound && <td className="py-4 px-6"><EntityTag name={po.entity_name} /></td>}
                       <td className="py-4 px-6 text-sm font-mono text-blue-600">{po.pr_number || "—"}</td>
                       <td className="py-4 px-6 text-sm text-slate-900">{po.vendor_name}</td>
                       <td className="py-4 px-6 text-sm text-slate-600">{po.order_date}</td>
@@ -289,7 +244,7 @@ export default function Procurement() {
                   {payList.map((pay) => (
                     <tr key={pay.id} className={`border-b border-slate-50 ${rowClass(pay, "PayReq", user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-amber-700">{pay.payreq_number}</td>
-                      {!bound && <td className="py-4 px-6"><EntityTag row={pay} /></td>}
+                      {!bound && <td className="py-4 px-6"><EntityTag name={pay.entity_name} /></td>}
                       <td className="py-4 px-6"><span className={`text-xs font-semibold px-2 py-0.5 rounded border ${pay.route === "via_po" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>{pay.route === "via_po" ? "dari PO" : "dari PR"}</span></td>
                       <td className="py-4 px-6 text-sm font-mono text-blue-600">{pay.po_number || pay.pr_number || "—"}</td>
                       <td className="py-4 px-6 text-sm font-mono text-slate-900 text-right">{fmtRp(pay.amount)}</td>

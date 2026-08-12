@@ -5,11 +5,12 @@ import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { useApi } from "../../lib/hooks";
+import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
-interface InvRow { warehouse_id: number; warehouse_name: string; sapropdi_id: number; sapropdi_name: string; total_in: number; total_out: number; remaining: number; }
-interface StockInRow { id: number; stock_in_number: string; stock_in_date: string; warehouse_name: string; po_number: string | null; status: string; }
+interface InvRow { warehouse_id: number; warehouse_name: string; sapropdi_id: number; sapropdi_name: string; total_in: number; total_out: number; remaining: number; entity_name: string | null; }
+interface StockInRow { id: number; stock_in_number: string; stock_in_date: string; warehouse_name: string; po_number: string | null; status: string; entity_name: string | null; }
 interface Warehouse { id: number; warehouse_name: string; }
 
 export default function StockManagement() {
@@ -17,12 +18,17 @@ export default function StockManagement() {
   const location = useLocation();
   const isStockIn = location.pathname.includes("/stock-in");
 
-  const { data: warehouses } = useApi<Warehouse[]>("warehouses");
+  const bound = useEntityBound();
+  const [entityFilter, setEntityFilter] = useState("");
+  const { data: warehouses } = useApi<Warehouse[]>("warehouses", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
   const [warehouseId, setWarehouseId] = useState("");
   const [search, setSearch] = useState("");
 
-  const { data: inv, loading: invLoading } = useApi<InvRow[]>(!isStockIn ? "warehouse-stock/inventory" : null, warehouseId ? { warehouse_id: warehouseId } : undefined, [warehouseId, isStockIn]);
-  const { data: stockIns, loading: siLoading } = useApi<StockInRow[]>(isStockIn ? "stock-in" : null, undefined, [isStockIn]);
+  const scoped = entityFilter ? { entity_id: entityFilter } : {};
+  const { data: inv, loading: invLoading } = useApi<InvRow[]>(!isStockIn ? "warehouse-stock/inventory" : null,
+    { ...(warehouseId ? { warehouse_id: warehouseId } : {}), ...scoped }, [warehouseId, isStockIn, entityFilter]);
+  const { data: stockIns, loading: siLoading } = useApi<StockInRow[]>(isStockIn ? "stock-in" : null,
+    scoped, [isStockIn, entityFilter]);
 
   const invList = (inv || []).filter((r) => search === "" || r.sapropdi_name?.toLowerCase().includes(search.toLowerCase()));
   const siList = (stockIns || []).filter((r) => search === "" || r.stock_in_number?.toLowerCase().includes(search.toLowerCase()));
@@ -33,6 +39,7 @@ export default function StockManagement() {
         <div>
           <h1 className="text-2xl text-slate-900 mb-1">{isStockIn ? "Stock In" : "Inventory Saprodi"}</h1>
           <p className="text-sm text-slate-500">{isStockIn ? "Penerimaan barang dari Purchase Order" : "Stok saprodi terhitung (Stock In − Distribusi)"}</p>
+          <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
         <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/warehouse/stockin/create")}>
           <PackagePlus className="w-4 h-4 mr-2" />Stock In Baru
@@ -56,11 +63,12 @@ export default function StockManagement() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-slate-50 border-b border-slate-100">
-                {["Gudang", "Saprodi", "Total Masuk", "Total Keluar", "Sisa Stok"].map((h) => <th key={h} className={`${["Total Masuk", "Total Keluar", "Sisa Stok"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
+                {[...(bound ? [] : ["Entitas"]), "Gudang", "Saprodi", "Total Masuk", "Total Keluar", "Sisa Stok"].map((h) => <th key={h} className={`${["Total Masuk", "Total Keluar", "Sisa Stok"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {invList.map((r) => (
                   <tr key={`${r.warehouse_id}-${r.sapropdi_id}`} className="border-b border-slate-50 hover:bg-slate-50/50">
+                    {!bound && <td className="py-3 px-5"><EntityTag name={r.entity_name} /></td>}
                     <td className="py-3 px-5 text-sm text-slate-600">{r.warehouse_name}</td>
                     <td className="py-3 px-5 text-sm font-semibold text-slate-900">{r.sapropdi_name}</td>
                     <td className="py-3 px-5 text-right text-sm font-mono text-emerald-700">{num(r.total_in)}</td>
@@ -77,13 +85,14 @@ export default function StockManagement() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-slate-50 border-b border-slate-100">
-                {["Nomor SI", "Tanggal", "Gudang", "PO", "Status"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}
+                {["Nomor SI", "Tanggal", ...(bound ? [] : ["Entitas"]), "Gudang", "PO", "Status"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}
               </tr></thead>
               <tbody>
                 {siList.map((r) => (
                   <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                     <td className="py-3 px-5 text-sm font-mono font-semibold text-emerald-700">{r.stock_in_number}</td>
                     <td className="py-3 px-5 text-sm text-slate-600">{r.stock_in_date}</td>
+                    {!bound && <td className="py-3 px-5"><EntityTag name={r.entity_name} /></td>}
                     <td className="py-3 px-5 text-sm text-slate-700">{r.warehouse_name}</td>
                     <td className="py-3 px-5 text-sm font-mono text-blue-600">{r.po_number || "—"}</td>
                     <td className="py-3 px-5"><span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">{r.status}</span></td>

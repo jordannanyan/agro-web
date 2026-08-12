@@ -3,25 +3,34 @@ import { useNavigate } from "react-router";
 import { ArrowLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
+import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
 interface Sapropdi { id: number; sapropdi_name: string; }
 interface Warehouse { id: number; warehouse_name: string; }
-interface CardRow { date: string; type: string; ref: string; qty_in: number; qty_out: number; balance: number; }
+interface CardRow {
+  date: string; type: string; ref: string; qty_in: number; qty_out: number; balance: number;
+  warehouse_name: string | null; entity_name: string | null;
+}
 
 export default function StockCard() {
   const navigate = useNavigate();
+  const bound = useEntityBound();
+  const [entityFilter, setEntityFilter] = useState("");
   const { data: sapropdi } = useApi<Sapropdi[]>("sapropdi");
-  const { data: warehouses } = useApi<Warehouse[]>("warehouses");
+  const { data: warehouses } = useApi<Warehouse[]>("warehouses", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
   const [sapropdiId, setSapropdiId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
 
   const { data: card, loading } = useApi<CardRow[]>(
     sapropdiId ? "warehouse-stock/stock-card" : null,
-    sapropdiId ? { sapropdi_id: sapropdiId, warehouse_id: warehouseId || undefined } : undefined,
-    [sapropdiId, warehouseId]
+    sapropdiId ? { sapropdi_id: sapropdiId, warehouse_id: warehouseId || undefined, entity_id: entityFilter || undefined } : undefined,
+    [sapropdiId, warehouseId, entityFilter]
   );
+  // With no warehouse chosen the card mixes movements from every warehouse the
+  // viewer may see, so it has to say which one each line came from.
+  const showOrigin = !bound && !warehouseId;
 
   const selectCls = "px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white";
 
@@ -29,7 +38,11 @@ export default function StockCard() {
     <div className="space-y-6 pb-8">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate("/warehouse/stock-list")} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
-        <div><h1 className="text-2xl text-slate-900 mb-0.5">Kartu Stok</h1><p className="text-sm text-slate-500">Riwayat masuk/keluar & saldo berjalan per saprodi</p></div>
+        <div>
+          <h1 className="text-2xl text-slate-900 mb-0.5">Kartu Stok</h1>
+          <p className="text-sm text-slate-500">Riwayat masuk/keluar &amp; saldo berjalan per saprodi</p>
+          <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
+        </div>
       </div>
 
       <Card className="p-4">
@@ -49,12 +62,14 @@ export default function StockCard() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
-              {["Tanggal", "Tipe", "Referensi", "Masuk", "Keluar", "Saldo"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Saldo"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
+              {["Tanggal", ...(showOrigin ? ["Entitas", "Gudang"] : []), "Tipe", "Referensi", "Masuk", "Keluar", "Saldo"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Saldo"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
             </tr></thead>
             <tbody>
               {(card || []).map((r, i) => (
                 <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-3 px-5 text-sm text-slate-600 whitespace-nowrap">{r.date}</td>
+                  {showOrigin && <td className="py-3 px-5"><EntityTag name={r.entity_name} /></td>}
+                  {showOrigin && <td className="py-3 px-5 text-sm text-slate-600">{r.warehouse_name || "—"}</td>}
                   <td className="py-3 px-5">
                     <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${r.type === "Stock In" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                       {r.type === "Stock In" ? <ArrowDownCircle className="w-3 h-3" /> : <ArrowUpCircle className="w-3 h-3" />}{r.type}

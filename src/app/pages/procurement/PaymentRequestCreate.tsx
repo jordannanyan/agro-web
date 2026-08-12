@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 
 interface BudgetCode { id: number; code: string; }
 interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; grand_total: number; }
@@ -66,13 +67,26 @@ export default function PaymentRequestCreate() {
   }, [id]);
 
   // The entity is the source document's and the server reads it there when saving,
-  // so the form never holds it. Only the amount is prefilled, as a suggestion.
-  useEffect(() => {
+  // so the form never holds it. The amount is prefilled as a suggestion — a partial
+  // payment is legitimate, so it stays editable.
+  //
+  // The total comes from the preview panel below, which has already loaded the
+  // source document. A purchase order's grand total is not in the list response at
+  // all (it is computed per order), which is why the amount used to stay 0 for
+  // Route B and had to be keyed in by hand.
+  const [sourceTotal, setSourceTotal] = useState<number | null>(null);
+  function handleSourceLoaded({ grandTotal }: { grandTotal: number }) {
+    setSourceTotal(grandTotal);
     if (skipAutofill.current) { skipAutofill.current = false; return; }
-    if (sourceType === "PR" && prId && !amount) {
-      const pr = (prs || []).find((p) => String(p.id) === prId);
-      if (pr) setAmount(String(pr.grand_total ?? ""));
-    }
+    if (grandTotal > 0 && !(Number(amount) > 0)) setAmount(String(grandTotal));
+  }
+
+  // Changing the source clears a suggestion the user has not touched, so the old
+  // document's total cannot be carried onto the new one unnoticed.
+  useEffect(() => {
+    if (skipAutofill.current) return;
+    setSourceTotal(null);
+    if (sourceTotal != null && Number(amount) === sourceTotal) setAmount("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prId, poId, sourceType]);
 
@@ -147,6 +161,15 @@ export default function PaymentRequestCreate() {
           )}
         </div>
 
+        {/* What is being paid for. A payment request used to show only a number and
+            an amount, so whoever approved it had to open another screen to learn
+            what the money was for. */}
+        <SourceDocumentPreview
+          docType={sourceType === "PO" ? "PO" : "PR"}
+          docId={sourceType === "PO" ? poId : prId}
+          onLoaded={handleSourceLoaded}
+        />
+
         {/* Detail */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Detail Pembayaran</h2>
@@ -156,7 +179,24 @@ export default function PaymentRequestCreate() {
             <div><label className={label}>Project Code <span className="text-red-500">*</span></label>
               <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">— pilih —</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select>
             </div>
-            <div><label className={label}>Nominal (Rp) <span className="text-red-500">*</span></label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" /></div>
+            <div>
+              <label className={label}>Nominal (Rp) <span className="text-red-500">*</span></label>
+              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+              {/* Paying less than the source total is a legitimate partial payment,
+                  so this states the difference instead of blocking it. */}
+              {sourceTotal != null && sourceTotal > 0 && (
+                Number(amount) === sourceTotal ? (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Otomatis dari total {sourceType === "PO" ? "PO" : "PR"} ({fmtRp(sourceTotal)}) — boleh diubah.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-amber-600 mt-1">
+                    Berbeda dari total {sourceType === "PO" ? "PO" : "PR"} {fmtRp(sourceTotal)}
+                    {Number(amount) > 0 && ` · selisih ${fmtRp(Math.abs(sourceTotal - Number(amount)))}`}.
+                  </p>
+                )
+              )}
+            </div>
             <div><label className={label}>Penanggung Jawab</label><Input value={pic} onChange={(e) => setPic(e.target.value)} placeholder="Nama PIC" /></div>
             <div><label className={label}>Tanggal Kegiatan</label><Input type="date" value={activityDate} onChange={(e) => setActivityDate(e.target.value)} /></div>
             <div><label className={label}>Estimasi Bayar</label><Input type="date" value={estPayDate} onChange={(e) => setEstPayDate(e.target.value)} /></div>

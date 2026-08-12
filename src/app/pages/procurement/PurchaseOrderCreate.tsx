@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -172,6 +173,11 @@ export default function PurchaseOrderCreate() {
             <div className="col-span-3"><label className="text-xs text-slate-500 font-medium mb-1.5 block">Termin Pembayaran</label><Input value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="mis. Net 30" /></div>
           </div>
         </div>
+
+        {/* What the chosen request actually asked for — budget code, saprodi and unit
+            are on the PR but not on the PO lines, so without this the buyer works
+            from a description alone. */}
+        <SourceDocumentPreview docType="PR" docId={prId} />
 
         {/* Items */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6">

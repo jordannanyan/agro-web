@@ -5,6 +5,7 @@ import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { useApi } from "../../lib/hooks";
+import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -13,6 +14,7 @@ interface Warehouse { id: number; warehouse_name: string; }
 interface Row {
   id: number; stock_out_number: string; stock_out_date: string;
   warehouse_name: string | null; issued_by_name: string | null;
+  entity_id: number | null; entity_name: string | null;
   line_count: number; total_qty: number; total_amount: number; notes: string | null;
 }
 
@@ -20,9 +22,13 @@ export default function StockOutList() {
   const navigate = useNavigate();
   const [warehouseId, setWarehouseId] = useState("");
   const [search, setSearch] = useState("");
-  const { data: warehouses } = useApi<Warehouse[]>("warehouses");
-  const { data: rows, loading, error } = useApi<Row[]>(
-    "stock-out", warehouseId ? { warehouse_id: warehouseId } : undefined, [warehouseId]);
+  const bound = useEntityBound();
+  const [entityFilter, setEntityFilter] = useState("");
+  const { data: warehouses } = useApi<Warehouse[]>("warehouses", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
+  const { data: rows, loading, error } = useApi<Row[]>("stock-out", {
+    ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+    ...(entityFilter ? { entity_id: entityFilter } : {}),
+  }, [warehouseId, entityFilter]);
 
   const list = (rows || []).filter((r) =>
     search === "" || r.stock_out_number.toLowerCase().includes(search.toLowerCase()));
@@ -37,6 +43,7 @@ export default function StockOutList() {
           <p className="text-sm text-slate-500">
             Barang keluar dari gudang ke petani — menggantikan Distribusi (Pre-Finance) dan Operational Investment (Profit Sharing).
           </p>
+          <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
         <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate("/warehouse/stock-out/create")}>
           <Plus className="w-4 h-4 mr-2" />Buat Stock Out
@@ -63,7 +70,7 @@ export default function StockOutList() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-slate-50 border-b border-slate-100">
-                {["Nomor", "Tanggal", "Gudang", "Baris", "Total Qty", "Nilai", "Petugas"].map((h) => <th key={h} className={th}>{h}</th>)}
+                {["Nomor", "Tanggal", ...(bound ? [] : ["Entitas"]), "Gudang", "Baris", "Total Qty", "Nilai", "Petugas"].map((h) => <th key={h} className={th}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {list.map((r) => (
@@ -83,6 +90,7 @@ export default function StockOutList() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{r.stock_out_date}</td>
+                    {!bound && <td className="py-3 px-4"><EntityTag name={r.entity_name} /></td>}
                     <td className="py-3 px-4 text-sm text-slate-600">{r.warehouse_name || "—"}</td>
                     <td className="py-3 px-4 text-sm text-slate-600">{r.line_count}</td>
                     <td className="py-3 px-4 text-sm font-mono text-slate-700">{num(r.total_qty)}</td>
@@ -91,7 +99,7 @@ export default function StockOutList() {
                   </tr>
                 ))}
                 {!list.length && (
-                  <tr><td colSpan={7} className="py-10 text-center">
+                  <tr><td colSpan={bound ? 7 : 8} className="py-10 text-center">
                     <PackageMinus className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="text-sm text-slate-400">Belum ada stock out.</p>
                   </td></tr>

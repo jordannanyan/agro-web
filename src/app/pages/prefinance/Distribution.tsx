@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -15,6 +16,7 @@ interface DistRow {
   id: number; date: string; type_name: string; farmer_name: string; plot_name: string | null;
   sapropdi_name: string | null; quantity: number | null; total_amount: number; shipped_at: string | null;
   scheme: string | null; warehouse_name: string | null;
+  entity_id: number | null; entity_name: string | null;
 }
 
 function typeBadge(type: string) {
@@ -32,7 +34,12 @@ const SCHEME_META: Record<string, { label: string; cls: string }> = {
 
 export default function Distribution() {
   const navigate = useNavigate();
-  const { data: rows, loading, error, refetch } = useApi<DistRow[]>("pre-finance/distributions");
+  // Rows are entity-scoped by the API; accounts that span several PTs get the
+  // filter and the per-row tag so they can tell whose debt each line is.
+  const bound = useEntityBound();
+  const [entityFilter, setEntityFilter] = useState("");
+  const { data: rows, loading, error, refetch } = useApi<DistRow[]>(
+    "pre-finance/distributions", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
   const [search, setSearch] = useState("");
 
   const list = (rows || []).filter((r) => search === "" || r.farmer_name?.toLowerCase().includes(search.toLowerCase()));
@@ -56,6 +63,7 @@ export default function Distribution() {
           <p className="text-sm text-slate-500">
             Setiap baris yang pernah keluar gudang ke petani — Pre-Finance &amp; Profit Sharing. Nilainya menjadi utang petani.
           </p>
+          <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
         {/* Issuing goods is a warehouse act now — this page is the line-level record of it. */}
         <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate("/warehouse/stock-out/create")}><Plus className="w-4 h-4 mr-2" />Buat Stock Out</Button>
@@ -72,12 +80,13 @@ export default function Distribution() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
-              {["Tanggal", "Tipe", "Skema", "Petani", "Plot", "Saprodi", "Gudang", "Qty", "Nilai", "Kirim", ""].map((h) => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">{h}</th>)}
+              {["Tanggal", ...(bound ? [] : ["Entitas"]), "Tipe", "Skema", "Petani", "Plot", "Saprodi", "Gudang", "Qty", "Nilai", "Kirim", ""].map((h, i) => <th key={`${h}-${i}`} className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">{h}</th>)}
             </tr></thead>
             <tbody>
               {list.map((r) => (
                 <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{r.date}</td>
+                  {!bound && <td className="py-3 px-4"><EntityTag name={r.entity_name} /></td>}
                   <td className="py-3 px-4"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${typeBadge(r.type_name)}`}>{r.type_name}</span></td>
                   <td className="py-3 px-4">
                     {(() => { const m = SCHEME_META[r.scheme ?? ""] ?? SCHEME_META.BeliPutus;

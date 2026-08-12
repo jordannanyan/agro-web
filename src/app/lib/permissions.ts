@@ -202,6 +202,29 @@ export function canEditDocument(
   return user.role_code === requesterRoleOf(docType, approvals);
 }
 
+/**
+ * May this user delete this document?
+ *
+ * Only a Draft — once a document has entered the chain it is a record of what
+ * people decided, and removing it is an administrator's act. The API enforces the
+ * same rule; hiding the button keeps people from meeting a refusal they could not
+ * have predicted.
+ */
+export function canDeleteDocument(
+  user: UserLike | null | undefined,
+  docType: DocType,
+  doc: DocLike,
+  approvals?: StepLike[] | null,
+): boolean {
+  if (!user?.role_code) return false;
+  if (doc.status === "Paid") return false;
+  if (!sameEntity(user, doc)) return false;
+  if (isSystemAdmin(user.role_code)) return true;
+  if (doc.status !== "Draft") return false;
+  return WRITERS[docType].includes(user.role_code as Role)
+    && user.role_code === requesterRoleOf(docType, approvals);
+}
+
 /** May this user push a revised document back into the approval chain? */
 export function canResubmit(
   user: UserLike | null | undefined,
