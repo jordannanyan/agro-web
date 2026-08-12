@@ -7,6 +7,8 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { canWriteOperations } from "../../lib/permissions";
+import { useAuth } from "../../store/AuthContext";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -134,6 +136,7 @@ function ProcessingModal({ onClose, onSaved, commodities, warehouses, purchasing
 }
 
 export default function Processing() {
+  const mayWrite = canWriteOperations(useAuth().user);
   const { data: rows, loading, error, refetch } = useApi<ProcessingRow[]>("processing");
   const { data: commodities } = useApi<Commodity[]>("commodities");
   const { data: warehouses } = useApi<Warehouse[]>("warehouses");
@@ -154,7 +157,7 @@ export default function Processing() {
       {showModal && <ProcessingModal onClose={() => { setShowModal(false); setEditRow(null); }} onSaved={refetch} commodities={commodities || []} warehouses={warehouses || []} purchasings={purchasings || []} editRow={editRow} />}
       <div className="flex items-start justify-between">
         <div><h1 className="text-2xl text-slate-900 mb-1">Processing</h1><p className="text-sm text-slate-500">Pengolahan komoditas per batch — input dari Purchasing, output ke Selling</p></div>
-        <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { setEditRow(null); setShowModal(true); }}><Plus className="w-4 h-4 mr-2" />Batch Baru</Button>
+        {mayWrite && <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { setEditRow(null); setShowModal(true); }}><Plus className="w-4 h-4 mr-2" />Batch Baru</Button>}
       </div>
 
       <Card className="p-4">

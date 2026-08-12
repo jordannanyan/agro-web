@@ -8,6 +8,8 @@ import { Input } from "../../components/ui/input";
 import { Badge } from "../../components/ui/badge";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { canWriteOperations } from "../../lib/permissions";
+import { useAuth } from "../../store/AuthContext";
 
 const formatRp = (val: number) => `Rp ${new Intl.NumberFormat("id-ID").format(Number(val || 0))}`;
 
@@ -206,6 +208,7 @@ function TabOutstanding() {
 
 export default function Installment() {
   const navigate = useNavigate();
+  const mayWrite = canWriteOperations(useAuth().user);
   const [activeTab, setActiveTab] = useState<"cicilan" | "outstanding">("cicilan");
 
   return (
@@ -215,9 +218,11 @@ export default function Installment() {
           <h1 className="text-2xl text-slate-900 mb-1">Pre-Finance — Cicilan (Installment)</h1>
           <p className="text-sm text-slate-500">Pembayaran cicilan utang petani, breakdown per tipe.</p>
         </div>
-        <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/prefinance/installment/create")}>
-          <Plus className="w-4 h-4 mr-2" />Tambah Cicilan
-        </Button>
+        {mayWrite && (
+          <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/prefinance/installment/create")}>
+            <Plus className="w-4 h-4 mr-2" />Tambah Cicilan
+          </Button>
+        )}
       </div>
 
       <div className="border-b border-slate-200">

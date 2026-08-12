@@ -7,6 +7,8 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { canWriteOperations } from "../../lib/permissions";
+import { useAuth } from "../../store/AuthContext";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -84,6 +86,7 @@ function SellingModal({ onClose, onSaved, processings, offtakers, warehouses, ed
 }
 
 export default function Selling() {
+  const mayWrite = canWriteOperations(useAuth().user);
   const { data: rows, loading, error, refetch } = useApi<SellingRow[]>("selling");
   const { data: processings } = useApi<ProcessingLite[]>("processing");
   const { data: offtakers } = useApi<Offtaker[]>("offtakers");
@@ -106,7 +109,7 @@ export default function Selling() {
       {showModal && <SellingModal onClose={() => { setShowModal(false); setEditRow(null); }} onSaved={refetch} processings={processings || []} offtakers={offtakers || []} warehouses={warehouses || []} editRow={editRow} />}
       <div className="flex items-start justify-between">
         <div><h1 className="text-2xl text-slate-900 mb-1">Selling</h1><p className="text-sm text-slate-500">Penjualan hasil olahan ke offtaker</p></div>
-        <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { setEditRow(null); setShowModal(true); }}><Plus className="w-4 h-4 mr-2" />Catat Penjualan</Button>
+        {mayWrite && <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { setEditRow(null); setShowModal(true); }}><Plus className="w-4 h-4 mr-2" />Catat Penjualan</Button>}
       </div>
 
       <div className="grid grid-cols-3 gap-4">

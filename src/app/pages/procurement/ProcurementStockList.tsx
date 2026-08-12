@@ -5,10 +5,13 @@ import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { useApi } from "../../lib/hooks";
+import { canWriteOperations } from "../../lib/permissions";
+import { useAuth } from "../../store/AuthContext";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
 export default function ProcurementStockList() {
+  const mayWrite = canWriteOperations(useAuth().user);
   const navigate = useNavigate();
   const { data: inv, loading } = useApi<any[]>("warehouse-stock/inventory");
   const { data: reorder } = useApi<any[]>("warehouse-stock/reorder");
@@ -28,7 +31,7 @@ export default function ProcurementStockList() {
     <div className="space-y-6 pb-8">
       <div className="flex items-start justify-between">
         <div><h1 className="text-2xl text-slate-900 mb-1">Stok Saprodi (Procurement)</h1><p className="text-sm text-slate-500">Posisi stok saprodi sebagai acuan pengajuan pembelian</p></div>
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate("/procurement/pr/create")}><Plus className="w-4 h-4 mr-2" />Buat PR</Button>
+        {mayWrite && <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate("/procurement/pr/create")}><Plus className="w-4 h-4 mr-2" />Buat PR</Button>}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

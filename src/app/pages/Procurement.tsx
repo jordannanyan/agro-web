@@ -10,7 +10,7 @@ import { Input } from "../components/ui/input";
 import { api } from "../lib/api";
 import { useApi } from "../lib/hooks";
 import { useAuth } from "../store/AuthContext";
-import { isEntityBound, canDeleteDocument, type DocType } from "../lib/permissions";
+import { isEntityBound, canDeleteDocument, canWriteOperations, type DocType } from "../lib/permissions";
 import { DocumentStatus, isMyTurn, isMyRevision, type PendingInfo } from "../components/DocumentStatus";
 import { EntityScopeBar, EntityTag } from "../components/EntityScope";
 
@@ -71,6 +71,8 @@ export default function Procurement() {
   // else (Procurement, Finance, Director, NBSV admins) sees every PT, so their
   // rows are tagged with the entity and they get a filter to narrow it down.
   const bound = isEntityBound(user);
+  // The Admin supervises procurement without taking part in it.
+  const mayWrite = canWriteOperations(user);
   const [entityFilter, setEntityFilter] = useState("");
   const scopeQuery = entityFilter ? { entity_id: entityFilter } : undefined;
 
@@ -160,7 +162,7 @@ export default function Procurement() {
               <div><h2 className="text-slate-900 font-semibold mb-1">Purchase Request List</h2><p className="text-sm text-slate-500">Permintaan pembelian dari tim operasional</p></div>
               <div className="flex items-center gap-2">
                 <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Cari PR..." className="pl-9 w-64" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate("/procurement/pr/create")}><Plus className="w-4 h-4 mr-2" />Create PR</Button>
+                {mayWrite && <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => navigate("/procurement/pr/create")}><Plus className="w-4 h-4 mr-2" />Create PR</Button>}
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -200,7 +202,7 @@ export default function Procurement() {
           <Card>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div><h2 className="text-slate-900 font-semibold mb-1">Purchase Order List</h2><p className="text-sm text-slate-500">Dibuat dari PR — satu PR bisa menghasilkan beberapa PO</p></div>
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/procurement/po/create")}><Plus className="w-4 h-4 mr-2" />Create PO</Button>
+              {mayWrite && <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/procurement/po/create")}><Plus className="w-4 h-4 mr-2" />Create PO</Button>}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -232,7 +234,7 @@ export default function Procurement() {
           <Card>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div><h2 className="text-slate-900 font-semibold mb-1">Payment Request List</h2><p className="text-sm text-slate-500">Route A: langsung dari PR · Route B: dari PO</p></div>
-              <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => navigate("/procurement/payreq/create")}><Plus className="w-4 h-4 mr-2" />Create PayReq</Button>
+              {mayWrite && <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => navigate("/procurement/payreq/create")}><Plus className="w-4 h-4 mr-2" />Create PayReq</Button>}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">

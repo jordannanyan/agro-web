@@ -3,10 +3,13 @@ import { Boxes, PackagePlus, AlertTriangle, Warehouse, ArrowRight, TrendingDown 
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { useApi } from "../../lib/hooks";
+import { canWriteOperations } from "../../lib/permissions";
+import { useAuth } from "../../store/AuthContext";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
 export default function WarehouseDashboardSimple() {
+  const mayWrite = canWriteOperations(useAuth().user);
   const navigate = useNavigate();
   const { data: inv } = useApi<any[]>("warehouse-stock/inventory");
   const { data: reorder } = useApi<any[]>("warehouse-stock/reorder");
@@ -29,7 +32,7 @@ export default function WarehouseDashboardSimple() {
     <div className="space-y-6 pb-8">
       <div className="flex items-start justify-between">
         <div><h1 className="text-2xl text-slate-900 mb-1">Dashboard Gudang</h1><p className="text-sm text-slate-500">Ringkasan stok saprodi terhitung & aktivitas gudang</p></div>
-        <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/warehouse/stockin/create")}><PackagePlus className="w-4 h-4 mr-2" />Stock In Baru</Button>
+        {mayWrite && <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/warehouse/stockin/create")}><PackagePlus className="w-4 h-4 mr-2" />Stock In Baru</Button>}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

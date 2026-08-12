@@ -6,6 +6,9 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { useApi } from "../../lib/hooks";
 import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
+import { usePagedApi, Pagination } from "../../components/Pagination";
+import { canWriteOperations } from "../../lib/permissions";
+import { useAuth } from "../../store/AuthContext";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -25,13 +28,15 @@ export default function StockOutList() {
   const bound = useEntityBound();
   const [entityFilter, setEntityFilter] = useState("");
   const { data: warehouses } = useApi<Warehouse[]>("warehouses", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
-  const { data: rows, loading, error } = useApi<Row[]>("stock-out", {
-    ...(warehouseId ? { warehouse_id: warehouseId } : {}),
-    ...(entityFilter ? { entity_id: entityFilter } : {}),
-  }, [warehouseId, entityFilter]);
-
-  const list = (rows || []).filter((r) =>
-    search === "" || r.stock_out_number.toLowerCase().includes(search.toLowerCase()));
+  const { user } = useAuth();
+  const mayWrite = canWriteOperations(user);
+  const {
+    rows: list, meta, page, setPage, perPage, setPerPage, loading, error,
+  } = usePagedApi<Row>("stock-out", {
+    warehouse_id: warehouseId || undefined,
+    entity_id: entityFilter || undefined,
+    search: search || undefined,
+  }, [warehouseId, entityFilter, search]);
 
   const th = "text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap";
 
@@ -45,9 +50,11 @@ export default function StockOutList() {
           </p>
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
-        <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate("/warehouse/stock-out/create")}>
-          <Plus className="w-4 h-4 mr-2" />Buat Stock Out
-        </Button>
+        {mayWrite && (
+          <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate("/warehouse/stock-out/create")}>
+            <Plus className="w-4 h-4 mr-2" />Buat Stock Out
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -108,6 +115,7 @@ export default function StockOutList() {
             </table>
           </div>
         )}
+        <Pagination meta={meta} page={page} onPage={setPage} perPage={perPage} onPerPage={setPerPage} />
       </Card>
     </div>
   );

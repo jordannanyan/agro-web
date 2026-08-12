@@ -14,7 +14,8 @@
 //  - Finance Manager : + Financial, Profit Sharing; approver & eksekutor pembayaran.
 //  - Finance Staff   : Payment Request (input pembayaran) + Financial. Bukan approver.
 //  - Director        : semua area bisnis.
-//  - Admin           : administrasi sistem (Settings, user) + akses baca operasional.
+//  - Admin           : administrasi sistem (Settings, user) + BACA seluruh modul
+//                      operasional lintas entitas, tanpa hak mengubah.
 //  - Super Admin     : akses penuh tanpa pengecualian.
 
 export const ROLE = {
@@ -81,7 +82,12 @@ function matches(path: string, prefix: string): boolean {
 /** Can this role open this route? Dashboard ("/") is open to everyone logged in. */
 export function canAccessPath(roleCode: string | null | undefined, path: string): boolean {
   if (!roleCode) return false;
-  if (roleCode === ROLE.SUPER_ADMIN) return true; // full access to everything
+  // Both system administrators may open every screen. The Admin sees the whole
+  // organisation so they can support it; what they may *change* is decided by
+  // canWriteOperations() and by the API, not by hiding the page. Before this an
+  // Admin met "Akses Ditolak" everywhere and the product was unusable for the
+  // four people who hold that role.
+  if (roleCode === ROLE.SUPER_ADMIN || roleCode === ROLE.ADMIN) return true;
   if (path === "/") return true;
   for (const r of RULES) {
     if (matches(path, r.prefix)) return r.roles.includes(roleCode as Role);
@@ -95,15 +101,16 @@ export function canAccessPath(roleCode: string | null | undefined, path: string)
  * Only the role that owns the step may act on it. The Director used to be able to
  * act on any step, but under the 2026-08 flow the Director holds explicit steps on
  * PO and PayReq — a blanket bypass would hollow out the very control the flow exists
- * to enforce. Super Admin / Admin retain an override for stuck documents, and the
- * API records those as an explicit override in the activity log.
+ * to enforce. The Super Admin retains a break-glass override for stuck documents,
+ * recorded as an explicit override in the activity log; the Admin does not — they
+ * supervise the flow rather than sign inside it.
  */
 export function canApprove(
   roleCode: string | null | undefined,
   stepRoleCode: string | null | undefined,
 ): boolean {
   if (!roleCode) return false;
-  if (roleCode === ROLE.SUPER_ADMIN || roleCode === ROLE.ADMIN) return true;
+  if (roleCode === ROLE.SUPER_ADMIN) return true; // break-glass, logged as an override
   return !!stepRoleCode && roleCode === stepRoleCode;
 }
 
@@ -132,9 +139,9 @@ export const EDITABLE_STATUSES = ["Draft", "Revision"];
 
 /** Roles that may raise each kind of document — mirrors the API's write guards. */
 const WRITERS: Record<DocType, Role[]> = {
-  PR: [ROLE.FIELD_ADMIN, ROLE.PROJECT_MANAGER, ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN, ROLE.ADMIN],
-  PO: [ROLE.PROCUREMENT, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN, ROLE.ADMIN],
-  PayReq: [ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN, ROLE.ADMIN],
+  PR: [ROLE.FIELD_ADMIN, ROLE.PROJECT_MANAGER, ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
+  PO: [ROLE.PROCUREMENT, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
+  PayReq: [ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
 };
 
 /** Who files each kind of document when the chain has not been seeded yet. */
@@ -163,8 +170,27 @@ export interface UserLike {
   entity_id?: number | null;
 }
 
+/** Sees every entity's data: both administrators. Used for read scope only. */
 function isSystemAdmin(roleCode: string | null | undefined): boolean {
   return roleCode === ROLE.SUPER_ADMIN || roleCode === ROLE.ADMIN;
+}
+
+/**
+ * May override the business rules — edit a document past Draft, delete one that is
+ * already in the chain, act on someone else's step. Super Admin only: the Admin
+ * reads everything and changes nothing in the operational modules.
+ */
+function canOverride(roleCode: string | null | undefined): boolean {
+  return roleCode === ROLE.SUPER_ADMIN;
+}
+
+/**
+ * May this account take part in the operational flow at all — raise a request,
+ * issue stock, record a purchase? False for the Admin, who supervises the modules
+ * rather than works in them, so their screens show the data without the buttons.
+ */
+export function canWriteOperations(user: UserLike | null | undefined): boolean {
+  return !!user?.role_code && user.role_code !== ROLE.ADMIN;
 }
 
 /**
@@ -195,7 +221,7 @@ export function canEditDocument(
   if (!user?.role_code) return false;
   if (!EDITABLE_STATUSES.includes(doc.status)) return false;
   if (!sameEntity(user, doc)) return false;
-  if (isSystemAdmin(user.role_code)) return true;
+  if (canOverride(user.role_code)) return true;
   // A draft may still be finished by anyone who could have raised it; a revision
   // belongs to whoever actually filed it.
   if (doc.status === "Draft") return WRITERS[docType].includes(user.role_code as Role);
@@ -219,7 +245,7 @@ export function canDeleteDocument(
   if (!user?.role_code) return false;
   if (doc.status === "Paid") return false;
   if (!sameEntity(user, doc)) return false;
-  if (isSystemAdmin(user.role_code)) return true;
+  if (canOverride(user.role_code)) return true;
   if (doc.status !== "Draft") return false;
   return WRITERS[docType].includes(user.role_code as Role)
     && user.role_code === requesterRoleOf(docType, approvals);

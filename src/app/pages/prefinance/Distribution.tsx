@@ -8,6 +8,9 @@ import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
+import { usePagedApi, Pagination } from "../../components/Pagination";
+import { canWriteOperations } from "../../lib/permissions";
+import { useAuth } from "../../store/AuthContext";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -37,13 +40,19 @@ export default function Distribution() {
   // Rows are entity-scoped by the API; accounts that span several PTs get the
   // filter and the per-row tag so they can tell whose debt each line is.
   const bound = useEntityBound();
+  const { user } = useAuth();
+  const mayWrite = canWriteOperations(user);
   const [entityFilter, setEntityFilter] = useState("");
-  const { data: rows, loading, error, refetch } = useApi<DistRow[]>(
-    "pre-finance/distributions", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
   const [search, setSearch] = useState("");
-
-  const list = (rows || []).filter((r) => search === "" || r.farmer_name?.toLowerCase().includes(search.toLowerCase()));
-  const total = list.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+  // Both filters are sent to the server, so a farmer on page 12 is still found.
+  const {
+    rows: list, meta, page, setPage, perPage, setPerPage, loading, error, refetch,
+  } = usePagedApi<DistRow>("pre-finance/distributions", {
+    entity_id: entityFilter || undefined,
+    search: search || undefined,
+  }, [entityFilter, search]);
+  // Whole-set total, not the page's — the server sums the same filtered query.
+  const total = Number((meta as any)?.totals?.total_amount ?? 0);
 
   async function ship(id: number) {
     try { await api.upload(`pre-finance/distributions/${id}/ship`, new FormData()); toast.success("Ditandai terkirim"); refetch(); }
@@ -66,11 +75,11 @@ export default function Distribution() {
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
         {/* Issuing goods is a warehouse act now — this page is the line-level record of it. */}
-        <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate("/warehouse/stock-out/create")}><Plus className="w-4 h-4 mr-2" />Buat Stock Out</Button>
+        {mayWrite && <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate("/warehouse/stock-out/create")}><Plus className="w-4 h-4 mr-2" />Buat Stock Out</Button>}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Card className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Total Distribusi</p><p className="text-2xl font-bold text-slate-900">{list.length}</p></Card>
+        <Card className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Total Distribusi</p><p className="text-2xl font-bold text-slate-900">{(meta?.total ?? list.length).toLocaleString("id-ID")}</p></Card>
         <Card className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Total Nilai (Utang)</p><p className="text-2xl font-bold text-amber-700">{fmtRp(total)}</p></Card>
       </div>
 
@@ -104,14 +113,16 @@ export default function Distribution() {
                   <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-amber-700">{fmtRp(r.total_amount)}</td>
                   <td className="py-3 px-4">
                     {r.shipped_at ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-semibold"><CheckCircle2 className="w-3.5 h-3.5" />Terkirim</span>
-                      : <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => ship(r.id)}><Truck className="w-3.5 h-3.5 mr-1" />Kirim</Button>}
+                      : mayWrite ? <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => ship(r.id)}><Truck className="w-3.5 h-3.5 mr-1" />Kirim</Button>
+                      : <span className="text-xs text-slate-400">Belum dikirim</span>}
                   </td>
-                  <td className="py-3 px-4"><Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => remove(r.id)}><Trash2 className="w-4 h-4" /></Button></td>
+                  <td className="py-3 px-4">{mayWrite && <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => remove(r.id)}><Trash2 className="w-4 h-4" /></Button>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <Pagination meta={meta} page={page} onPage={setPage} perPage={perPage} onPerPage={setPerPage} />
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
         {error && !loading && <div className="p-16 text-center text-red-500 text-sm">{error}</div>}
         {!loading && !error && list.length === 0 && <div className="p-16 text-center"><PackageOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" /><p className="text-slate-500 font-medium">Belum ada distribusi</p></div>}

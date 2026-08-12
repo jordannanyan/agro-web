@@ -6,6 +6,9 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { useApi } from "../../lib/hooks";
 import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
+import { usePagedApi, Pagination } from "../../components/Pagination";
+import { canWriteOperations } from "../../lib/permissions";
+import { useAuth } from "../../store/AuthContext";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
@@ -27,11 +30,17 @@ export default function StockManagement() {
   const scoped = entityFilter ? { entity_id: entityFilter } : {};
   const { data: inv, loading: invLoading } = useApi<InvRow[]>(!isStockIn ? "warehouse-stock/inventory" : null,
     { ...(warehouseId ? { warehouse_id: warehouseId } : {}), ...scoped }, [warehouseId, isStockIn, entityFilter]);
-  const { data: stockIns, loading: siLoading } = useApi<StockInRow[]>(isStockIn ? "stock-in" : null,
-    scoped, [isStockIn, entityFilter]);
+  const { user } = useAuth();
+  const mayWrite = canWriteOperations(user);
+  const {
+    rows: siList, meta: siMeta, page: siPage, setPage: setSiPage,
+    perPage: siPerPage, setPerPage: setSiPerPage, loading: siLoading,
+  } = usePagedApi<StockInRow>(isStockIn ? "stock-in" : null, {
+    ...scoped, search: search || undefined,
+  }, [isStockIn, entityFilter, search]);
 
   const invList = (inv || []).filter((r) => search === "" || r.sapropdi_name?.toLowerCase().includes(search.toLowerCase()));
-  const siList = (stockIns || []).filter((r) => search === "" || r.stock_in_number?.toLowerCase().includes(search.toLowerCase()));
+
 
   return (
     <div className="space-y-6 pb-8">
@@ -41,9 +50,11 @@ export default function StockManagement() {
           <p className="text-sm text-slate-500">{isStockIn ? "Penerimaan barang dari Purchase Order" : "Stok saprodi terhitung (Stock In − Distribusi)"}</p>
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
-        <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/warehouse/stockin/create")}>
-          <PackagePlus className="w-4 h-4 mr-2" />Stock In Baru
-        </Button>
+        {mayWrite && (
+          <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/warehouse/stockin/create")}>
+            <PackagePlus className="w-4 h-4 mr-2" />Stock In Baru
+          </Button>
+        )}
       </div>
 
       <Card className="p-4">
@@ -100,6 +111,7 @@ export default function StockManagement() {
                 ))}
               </tbody>
             </table>
+            <Pagination meta={siMeta} page={siPage} onPage={setSiPage} perPage={siPerPage} onPerPage={setSiPerPage} />
             {siLoading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
             {!siLoading && siList.length === 0 && <div className="p-16 text-center"><AlertTriangle className="w-12 h-12 text-slate-300 mx-auto mb-4" /><p className="text-slate-500 font-medium">Belum ada Stock In</p></div>}
           </div>

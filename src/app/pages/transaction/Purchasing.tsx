@@ -7,6 +7,9 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { usePagedApi, Pagination } from "../../components/Pagination";
+import { canWriteOperations } from "../../lib/permissions";
+import { useAuth } from "../../store/AuthContext";
 
 // ── Types (API-shaped) ────────────────────────────────────────────────────────
 type Scheme = "BeliPutus" | "PreFinance" | "ProfitSharing";
@@ -32,6 +35,9 @@ interface PurchasingRow {
   collector?: { id: number; collector_name: string } | null;
   commodity?: { id: number; commodities_name: string } | null;
   grade?: { id: number; grade_name: string } | null;
+  // The API has always sent this and the edit form has always read it; the type
+  // just never said so, and nothing type-checks this project at build time.
+  warehouse?: { id: number; warehouse_name: string } | null;
 }
 
 const SCHEME_META: Record<Scheme, { label: string; cls: string }> = {
@@ -254,7 +260,18 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Purchasing() {
-  const { data: rows, loading, error, refetch } = useApi<PurchasingRow[]>("purchasing");
+  const { user } = useAuth();
+  const mayWrite = canWriteOperations(user);
+  const [search, setSearch] = useState("");
+  const [schemeFilter, setSchemeFilter] = useState<"" | Scheme>("");
+  // Search and scheme go to the server: filtering a single page in the browser
+  // would hide every match that happens to sit on another page.
+  const {
+    rows: list, meta, page, setPage, perPage, setPerPage, loading, error, refetch,
+  } = usePagedApi<PurchasingRow>("purchasing", {
+    search: search || undefined,
+    scheme: schemeFilter || undefined,
+  }, [search, schemeFilter]);
   const { data: plots } = useApi<Plot[]>("plots");
   const { data: commodities } = useApi<Commodity[]>("commodities");
   const { data: grades } = useApi<Grade[]>("grades");
@@ -263,18 +280,11 @@ export default function Purchasing() {
 
   const [showModal, setShowModal] = useState(false);
   const [editRow, setEditRow] = useState<PurchasingRow | null>(null);
-  const [search, setSearch] = useState("");
-  const [schemeFilter, setSchemeFilter] = useState<"" | Scheme>("");
 
-  const list = useMemo(() => (rows || []).filter((r) => {
-    const sup = r.supplier_type === "farmer" ? (r.farmer?.farmer_name ?? "") : (r.collector?.collector_name ?? "");
-    const ms = search === "" || sup.toLowerCase().includes(search.toLowerCase()) || (r.receipt_invoice ?? "").toLowerCase().includes(search.toLowerCase());
-    const msc = schemeFilter === "" || r.scheme === schemeFilter;
-    return ms && msc;
-  }), [rows, search, schemeFilter]);
-
-  const totalQty = list.reduce((s, r) => s + Number(r.quantity || 0), 0);
-  const totalValue = list.reduce((s, r) => s + Number(r.total_value || 0), 0);
+  // Totals cover the whole filtered set, not the page on screen — the server sums
+  // them over the same query that produced the rows.
+  const totalQty = Number((meta as any)?.totals?.quantity ?? 0);
+  const totalValue = Number((meta as any)?.totals?.total_value ?? 0);
 
   async function remove(id: number) {
     if (!confirm("Hapus data pembelian ini?")) return;
@@ -297,15 +307,17 @@ export default function Purchasing() {
           <h1 className="text-2xl text-slate-900 mb-1">Purchasing</h1>
           <p className="text-sm text-slate-500">Catatan pembelian komoditas dari petani atau collector — skema mengikuti plot</p>
         </div>
-        <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { setEditRow(null); setShowModal(true); }}>
-          <Plus className="w-4 h-4 mr-2" />Tambah Pembelian
-        </Button>
+        {mayWrite && (
+          <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { setEditRow(null); setShowModal(true); }}>
+            <Plus className="w-4 h-4 mr-2" />Tambah Pembelian
+          </Button>
+        )}
       </div>
 
       {/* KPI */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Total Transaksi", value: String(list.length), color: "text-slate-900" },
+          { label: "Total Transaksi", value: (meta?.total ?? list.length).toLocaleString("id-ID"), color: "text-slate-900" },
           { label: "Total Volume (Kg)", value: totalQty.toLocaleString("id-ID"), color: "text-blue-700" },
           { label: "Total Nilai", value: fmtRp(totalValue), color: "text-emerald-700" },
         ].map((s) => (
@@ -366,8 +378,8 @@ export default function Purchasing() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center justify-end gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => { setEditRow(r); setShowModal(true); }}><Pencil className="w-4 h-4" /></Button>
-                      <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => remove(r.id)}><Trash2 className="w-4 h-4" /></Button>
+                      {mayWrite && <Button size="sm" variant="ghost" onClick={() => { setEditRow(r); setShowModal(true); }}><Pencil className="w-4 h-4" /></Button>}
+                      {mayWrite && <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => remove(r.id)}><Trash2 className="w-4 h-4" /></Button>}
                     </div>
                   </td>
                 </tr>
@@ -375,6 +387,7 @@ export default function Purchasing() {
             </tbody>
           </table>
         </div>
+        <Pagination meta={meta} page={page} onPage={setPage} perPage={perPage} onPerPage={setPerPage} />
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
         {error && !loading && <div className="p-16 text-center text-red-500 text-sm">{error}</div>}
         {!loading && !error && list.length === 0 && (
