@@ -57,6 +57,9 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   // and by canApprove() below.
   { prefix: "/procurement/payment-request",  roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
   { prefix: "/procurement/payreq",           roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
+  // Reconciliation is the payment desk: the people who transfer the money and hold
+  // the statement, nobody else.
+  { prefix: "/procurement/reconciliation",   roles: [ROLE.FINANCE_MANAGER, ROLE.FINANCE_STAFF] },
   { prefix: "/procurement/purchase-order",   roles: ABOVE_FIELD_ADMIN },
   { prefix: "/procurement/po",               roles: ABOVE_FIELD_ADMIN },
   { prefix: "/procurement/vendor",           roles: ABOVE_FIELD_ADMIN },
@@ -115,13 +118,25 @@ export function canApprove(
 }
 
 /**
- * May this role record the cash disbursement on a fully approved payment request?
- * Finance Staff is included deliberately — they are normally the one who keys it in.
+ * May this role settle payments — upload the bank statement and work the matches?
+ * Finance Staff is included deliberately: they are the ones who make the transfers
+ * and hold the statement.
  */
 export function canRecordPayment(roleCode: string | null | undefined): boolean {
   return roleCode === ROLE.FINANCE_MANAGER
     || roleCode === ROLE.FINANCE_STAFF
     || roleCode === ROLE.SUPER_ADMIN;
+}
+
+/**
+ * May this role mark a payment paid *without* a statement line to show for it?
+ *
+ * Only the break-glass account. A payment request is settled by reconciling it
+ * against the bank — that is the control, and letting finance tick a box instead
+ * would quietly remove it. The API enforces the same rule and demands a reason.
+ */
+export function canOverridePayment(roleCode: string | null | undefined): boolean {
+  return roleCode === ROLE.SUPER_ADMIN;
 }
 
 // -----------------------------------------------------------------------------

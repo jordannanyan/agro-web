@@ -35,6 +35,7 @@ const menuItems = [
       { id: "proc-pr",    label: "Purchase Request",  path: "/procurement/purchase-request" },
       { id: "proc-po",    label: "Purchase Order",     path: "/procurement/purchase-order" },
       { id: "proc-pay",   label: "Payment Request",    path: "/procurement/payment-request" },
+      { id: "proc-recon", label: "Rekonsiliasi Pembayaran", path: "/procurement/reconciliation" },
       { id: "proc-vendor",label: "Vendor List",        path: "/procurement/vendor" },
       { id: "proc-stock", label: "Stock List",         path: "/procurement/stock-list" },
     ],

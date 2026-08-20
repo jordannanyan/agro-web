@@ -18,7 +18,7 @@ const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface PRRow extends PendingInfo { id: number; pr_number: string; entity_id: number | null; entity_name: string; request_date: string; date_required: string | null; status: string; grand_total: number; requested_by_name: string | null; }
 interface PORow extends PendingInfo { id: number; po_number: string; entity_id: number | null; entity_name: string; pr_number: string | null; vendor_name: string; status: string; order_date: string; }
-interface PayRow extends PendingInfo { id: number; payreq_number: string; entity_id: number | null; entity_name: string; pr_number: string | null; po_number: string | null; route: string; amount: number; estimated_pay_date: string | null; status: string; }
+interface PayRow extends PendingInfo { id: number; payreq_number: string; payment_code: string | null; entity_id: number | null; entity_name: string; pr_number: string | null; po_number: string | null; route: string; amount: number; estimated_pay_date: string | null; status: string; }
 
 // A row awaiting the viewer is tinted across its whole width — the badge alone is
 // easy to miss when a table runs long. Revisions get their own tint: they are the
@@ -245,7 +245,18 @@ export default function Procurement() {
                 <tbody>
                   {payList.map((pay) => (
                     <tr key={pay.id} className={`border-b border-slate-50 ${rowClass(pay, "PayReq", user?.role_code)}`}>
-                      <td className="py-4 px-6 text-sm font-mono font-semibold text-amber-700">{pay.payreq_number}</td>
+                      <td className="py-4 px-6 text-sm font-mono font-semibold text-amber-700">
+                        {pay.payreq_number}
+                        {/* The reference the transfer has to quote. Shown in the list
+                            because finance works from this screen when paying a batch,
+                            and opening every request to read one code is how codes get
+                            copied by eye and mistyped. */}
+                        {pay.payment_code && (
+                          <span className="block text-xs font-bold text-slate-500 tracking-wide" title="Kode pembayaran untuk keterangan transfer">
+                            {pay.payment_code}
+                          </span>
+                        )}
+                      </td>
                       {!bound && <td className="py-4 px-6"><EntityTag name={pay.entity_name} /></td>}
                       <td className="py-4 px-6"><span className={`text-xs font-semibold px-2 py-0.5 rounded border ${pay.route === "via_po" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>{pay.route === "via_po" ? "dari PO" : "dari PR"}</span></td>
                       <td className="py-4 px-6 text-sm font-mono text-blue-600">{pay.po_number || pay.pr_number || "—"}</td>

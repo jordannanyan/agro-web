@@ -10,6 +10,7 @@ import PaymentRequestCreate from "./pages/procurement/PaymentRequestCreate";
 import PaymentRequestView from "./pages/procurement/PaymentRequestView";
 import VendorList from "./pages/procurement/VendorList";
 import ProcurementStockList from "./pages/procurement/ProcurementStockList";
+import PaymentReconciliation from "./pages/procurement/PaymentReconciliation";
 import MapMonitoring from "./pages/MapMonitoring";
 import WarehouseDashboardSimple from "./pages/warehouse/WarehouseDashboardSimple";
 import StockManagement from "./pages/warehouse/StockManagement";
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
       { path: "procurement/payment-request",   Component: Procurement },
       { path: "procurement/vendor",            Component: VendorList },
       { path: "procurement/stock-list",        Component: ProcurementStockList },
+      { path: "procurement/reconciliation",    Component: PaymentReconciliation },
       // Create / view routes (unchanged)
       { path: "procurement/pr/create",         Component: PurchaseRequestCreate },
       { path: "procurement/pr/:id/edit",       Component: PurchaseRequestCreate },
