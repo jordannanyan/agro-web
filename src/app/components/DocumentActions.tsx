@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { Pencil, Send, RotateCcw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
+import { refreshInbox } from "../lib/inbox";
 import { Button } from "./ui/button";
 import { useAuth } from "../store/AuthContext";
 import {
@@ -53,6 +54,7 @@ export function DocumentActions({
       await api.put(`${ENDPOINT[docType]}/${doc.id}`, { status: "Pending" });
       toast.success("Dokumen diajukan untuk approval");
       onChanged();
+      refreshInbox();
     } catch (e: any) {
       toast.error(e?.message || "Gagal mengajukan dokumen");
     } finally { setBusy(false); }
@@ -64,6 +66,7 @@ export function DocumentActions({
       await api.post(`documents/${docType}/${doc.id}/resubmit`);
       toast.success("Dokumen dikirim ulang untuk approval");
       onChanged();
+      refreshInbox();
     } catch (e: any) {
       toast.error(e?.message || "Gagal mengirim ulang dokumen");
     } finally { setBusy(false); }

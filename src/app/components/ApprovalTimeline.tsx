@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, X, RotateCcw, Clock, CircleCheck, CircleX } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
+import { refreshInbox } from "../lib/inbox";
 import { Button } from "./ui/button";
 import { useAuth } from "../store/AuthContext";
 import { canApprove } from "../lib/permissions";
@@ -70,6 +71,7 @@ export function ApprovalTimeline({
       toast.success(action === "approve" ? "Langkah disetujui" : action === "reject" ? "Ditolak" : "Diminta revisi");
       setNoteFor(null); setNote("");
       onChanged();
+      refreshInbox(); // the document just left (or joined) somebody's queue
     } catch (e: any) {
       toast.error(e?.message || "Gagal memproses");
     } finally { setBusy(null); }

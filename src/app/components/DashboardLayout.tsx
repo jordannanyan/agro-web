@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useAuth, initials } from "../store/AuthContext";
 import { canAccessPath } from "../lib/permissions";
+import { useInboxCounts, type InboxCounts } from "../lib/inbox";
 
 const menuItems = [
   { id: "dashboard", icon: LayoutDashboard, label: "Dashboard", path: "/" },
@@ -98,6 +99,47 @@ const menuItems = [
   { id: "settings", icon: Settings, label: "Settings", path: "/settings" },
 ];
 
+// Which menu entry owns which count. Only the three procurement documents have an
+// approval chain, so only they can be waiting on anybody.
+const INBOX_PATHS: Record<string, keyof Omit<InboxCounts, "total">> = {
+  "/procurement/purchase-request": "PR",
+  "/procurement/purchase-order": "PO",
+  "/procurement/payment-request": "PayReq",
+};
+
+/** Spell out what the number is made of, for the badge's tooltip. */
+function inboxTitle(counts: InboxCounts, key?: keyof Omit<InboxCounts, "total">): string {
+  const b = key ? counts[key] : null;
+  const parts = b
+    ? [
+        b.approval ? `${b.approval} menunggu persetujuan Anda` : null,
+        b.revision ? `${b.revision} perlu Anda revisi` : null,
+        b.payment ? `${b.payment} siap dibayar` : null,
+      ]
+    : [`${counts.total} dokumen menunggu tindakan Anda`];
+  return parts.filter(Boolean).join(" · ");
+}
+
+/**
+ * The count of documents this person still has to act on.
+ *
+ * Red, filled and always visible — the same weight the lists give a row that is
+ * the viewer's turn. A quieter treatment would defeat the point: this exists
+ * because work was going unnoticed until somebody thought to open the list.
+ */
+function InboxBadge({ count, title, className = "" }: { count: number; title: string; className?: string }) {
+  if (!count) return null;
+  return (
+    <span
+      title={title}
+      aria-label={`${count} dokumen menunggu tindakan Anda`}
+      className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold leading-none ring-2 ring-red-100 shadow-sm ${className}`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -108,6 +150,10 @@ export default function DashboardLayout() {
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [loading, user, navigate]);
+
+  // Called before the early returns below: the hook order has to stay the same on
+  // every render, and `loading` / `user` change between them.
+  const inbox = useInboxCounts(!loading && !!user);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-[#FAFBFC] text-slate-400 text-sm">Memuat…</div>;
@@ -164,6 +210,14 @@ export default function DashboardLayout() {
               const hasSubItems = "subItems" in item && item.subItems;
               const isExpanded = expandedMenus.includes(item.id);
 
+              // The parent carries the sum of its own sub-items, and only of the
+              // ones this role may open — a number pointing at a hidden page is
+              // worse than none. It stays on show while the menu is expanded so
+              // the total is readable either way.
+              const groupCount = hasSubItems
+                ? item.subItems!.reduce((n, s) => n + (INBOX_PATHS[s.path] ? inbox[INBOX_PATHS[s.path]].total : 0), 0)
+                : 0;
+
               if (hasSubItems) {
                 return (
                   <li key={item.id}>
@@ -179,6 +233,7 @@ export default function DashboardLayout() {
                     >
                       <Icon className="w-5 h-5" strokeWidth={2} />
                       <span className="text-sm font-semibold flex-1 text-left">{item.label}</span>
+                      <InboxBadge count={groupCount} title={inboxTitle(inbox)} />
                       <ChevronDown
                         className={`w-4 h-4 transition-transform ${
                           isExpanded ? "rotate-180" : ""
@@ -189,6 +244,8 @@ export default function DashboardLayout() {
                       <ul className="mt-1 ml-4 space-y-0.5">
                         {item.subItems.map((subItem) => {
                           const isSubActive = location.pathname === subItem.path;
+                          const key = INBOX_PATHS[subItem.path];
+                          const count = key ? inbox[key].total : 0;
                           return (
                             <li key={subItem.id}>
                               <Link
@@ -199,7 +256,8 @@ export default function DashboardLayout() {
                                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                                 }`}
                               >
-                                {subItem.label}
+                                <span className="flex-1">{subItem.label}</span>
+                                <InboxBadge count={count} title={inboxTitle(inbox, key)} />
                               </Link>
                             </li>
                           );
@@ -287,9 +345,20 @@ export default function DashboardLayout() {
               <div className="w-px h-7 bg-slate-200 mx-1"></div>
 
               {/* Notifications */}
-              <button className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition-colors border border-slate-200">
+              {/* The dot here used to be painted on: always red, whether or not
+                  anything was waiting, so it told nobody anything. It now carries
+                  the same count as the sidebar and disappears at zero. */}
+              <button
+                onClick={() => navigate("/procurement/purchase-request")}
+                title={inbox.total ? inboxTitle(inbox) : "Tidak ada dokumen yang menunggu Anda"}
+                className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
+              >
                 <Bell className="w-4.5 h-4.5" strokeWidth={2.5} />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+                {inbox.total > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ring-2 ring-white">
+                    {inbox.total > 99 ? "99+" : inbox.total}
+                  </span>
+                )}
               </button>
 
               {/* Entity + User */}

@@ -6,6 +6,7 @@ import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { api } from "../../lib/api";
+import { refreshInbox } from "../../lib/inbox";
 import { useApi } from "../../lib/hooks";
 import { useAuth } from "../../store/AuthContext";
 import { canRecordPayment } from "../../lib/permissions";
@@ -68,6 +69,7 @@ export default function PaymentRequestView() {
       toast.success("Pembayaran dicatat");
       setPayNote("");
       refetch();
+      refreshInbox(); // paid: it drops out of finance's "siap dibayar" count
     } catch (e: any) {
       toast.error(e?.message || "Gagal mencatat pembayaran");
     } finally {
