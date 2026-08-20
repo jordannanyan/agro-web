@@ -14,7 +14,7 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   FileSpreadsheet, Upload, CheckCircle2, AlertTriangle, HelpCircle, Copy, Check,
-  Clock, History, ArrowRight, X, Banknote, Lock, Eye, EyeOff,
+  Clock, History, ArrowRight, X, Banknote, Lock, Eye, EyeOff, ShieldCheck, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../../components/ui/card";
@@ -58,7 +58,107 @@ interface Summary {
   unmatched: number; duplicate: number; incoming: number; tolerance: number; paid?: number;
 }
 
-interface Analysis { file_name: string; summary: Summary; lines: Line[] }
+interface Checks {
+  bank_identity: { ok: boolean; resaved: boolean; application: string | null; creator: string | null; title: string | null };
+  account_number: string | null;
+  account_known: boolean;
+  totals: { ok: boolean; parsed_in: number; parsed_out: number; stated_in: number | null; stated_out: number | null };
+  closing: { ok: boolean; computed: number | null; stated: number | null };
+  balance_chain: { ok: boolean; breaks: number; first_break_row: number | null; checked: number };
+  arithmetic_ok: boolean;
+}
+
+interface StatementInfo {
+  account_number: string | null; period: string | null;
+  opening_balance: number | null; closing_balance: number | null;
+  total_in: number | null; total_out: number | null;
+}
+
+interface Analysis {
+  file_name: string; summary: Summary; lines: Line[];
+  statement?: StatementInfo; checks?: Checks;
+}
+
+/**
+ * Where the file came from, as far as a file can say.
+ *
+ * Spelled out rather than reduced to a tick: nothing here proves the statement is
+ * the bank's, and a green panel that implies otherwise would be worse than none.
+ * What it does show is that the numbers inside agree with each other — which an
+ * edited file cannot manage without a great deal of care.
+ */
+function ProvenancePanel({ checks, statement }: { checks: Checks; statement?: StatementInfo }) {
+  const arith = checks.arithmetic_ok;
+  const rows = [
+    {
+      ok: checks.bank_identity.ok,
+      label: "Dibuat oleh",
+      detail: checks.bank_identity.application || "File tidak menyebutkan aplikasi pembuatnya",
+      note: checks.bank_identity.ok
+        ? "Aplikasi pembuatnya adalah sistem e-statement bank. Penanda ini bisa dipalsukan orang yang tahu caranya, tapi tidak bertahan kalau file sekadar dibuka lalu disimpan."
+        : checks.bank_identity.resaved
+          ? `File mengaku terbitan ${checks.bank_identity.creator || "bank"}, tetapi terakhir disimpan oleh aplikasi lain — artinya pernah dibuka dan disimpan ulang, bukan file mentah dari bank.`
+          : "Tidak ada penanda e-statement bank pada file ini.",
+    },
+    {
+      ok: checks.account_known,
+      label: "Nomor rekening",
+      detail: checks.account_number || "tidak terbaca",
+      note: checks.account_known ? undefined : "Rekening ini tidak ada dalam daftar rekening resmi.",
+    },
+    {
+      ok: checks.totals.ok,
+      label: "Total transaksi",
+      detail: `masuk ${fmtRp(checks.totals.parsed_in)} · keluar ${fmtRp(checks.totals.parsed_out)}`,
+      note: checks.totals.ok ? "Cocok dengan ringkasan yang dicetak bank di file yang sama." : "TIDAK cocok dengan ringkasan bank.",
+    },
+    {
+      ok: checks.balance_chain.ok && checks.closing.ok,
+      label: "Rantai saldo",
+      detail: checks.balance_chain.ok
+        ? `utuh di ${checks.balance_chain.checked} baris`
+        : `putus di ${checks.balance_chain.breaks} baris (pertama baris ${checks.balance_chain.first_break_row})`,
+      note: checks.balance_chain.ok
+        ? "Saldo tiap baris runtut dari baris sebelumnya sampai saldo akhir."
+        : "Nominal atau baris di file ini berubah setelah diterbitkan.",
+    },
+  ];
+
+  return (
+    <Card className={`p-5 ${arith ? "border-slate-200" : "border-red-300 bg-red-50/50"}`}>
+      <div className="flex items-start gap-2 mb-3">
+        {arith ? <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" /> : <ShieldAlert className="w-5 h-5 text-red-600 shrink-0" />}
+        <div>
+          <h3 className="text-slate-800 font-semibold text-sm">
+            {!arith
+              ? "File ini tidak lolos pemeriksaan"
+              : checks.bank_identity.ok
+                ? "Isi file konsisten"
+                : "Angka konsisten, tetapi file bukan berkas mentah dari bank"}
+          </h3>
+          <p className="text-xs text-slate-500">
+            {!arith
+              ? "Impor ditolak: angka di dalam file bertentangan satu sama lain. Unduh ulang rekening koran langsung dari bank."
+              : "Tidak ada cara membuktikan file benar-benar dari bank — spreadsheet tidak ditandatangani secara digital. Yang bisa diperiksa adalah apakah angkanya saling cocok; mengubah satu nominal memaksa pengubahnya memperbaiki seluruh kolom saldo dan empat angka ringkasan bank sekaligus."}
+            {statement?.period ? ` Periode: ${statement.period}.` : ""}
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {rows.map((r) => (
+          <div key={r.label} className={`rounded-xl px-3 py-2 border ${r.ok ? "bg-white border-slate-200" : "bg-red-50 border-red-200"}`}>
+            <div className="flex items-center gap-1.5">
+              {r.ok ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <AlertTriangle className="w-3.5 h-3.5 text-red-600" />}
+              <span className="text-xs font-semibold text-slate-700">{r.label}</span>
+            </div>
+            <p className="text-sm text-slate-800 mt-0.5 break-words">{r.detail}</p>
+            {r.note && <p className={`text-xs mt-0.5 ${r.ok ? "text-slate-400" : "text-red-600 font-medium"}`}>{r.note}</p>}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
 
 interface Outstanding {
   id: number; payreq_number: string; payment_code: string | null; amount: number;
@@ -260,6 +360,8 @@ export default function PaymentReconciliation() {
             </div>
           </Card>
 
+          {analysis?.checks && <ProvenancePanel checks={analysis.checks} statement={analysis.statement} />}
+
           {s && (
             <>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -281,7 +383,7 @@ export default function PaymentReconciliation() {
                     </span>
                   </p>
                   <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
-                    disabled={busy || s.will_pay === 0} onClick={apply}>
+                    disabled={busy || s.will_pay === 0 || analysis?.checks?.arithmetic_ok === false} onClick={apply}>
                     <Banknote className="w-4 h-4 mr-1.5" />{busy ? "Memproses…" : "Terapkan & Tandai Paid"}
                   </Button>
                 </Card>

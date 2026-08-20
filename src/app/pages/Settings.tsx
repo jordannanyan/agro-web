@@ -154,6 +154,18 @@ export default function Settings() {
     { name: "warehouse_name", label: "Nama Gudang", required: true },
     { name: "kth_id", label: "KTH", type: "select", options: kthOpts },
   ];
+  // The farmer's half of a profit share, per PT. Only this half is stored; the
+  // company's is 100 minus it, so the two can never contradict each other. A
+  // settlement copies the value in force at the time, so editing it here never
+  // rewrites a share that has already been worked out.
+  const entityFields: FieldDef[] = [
+    { name: "entities_name", label: "Entitas", required: true },
+    { name: "location", label: "Lokasi" },
+    { name: "entity_type", label: "Tipe", type: "select", options: [
+      { value: "Operational", label: "Operational" }, { value: "Support", label: "Support" }, { value: "System", label: "System" }] },
+    { name: "profit_share_farmer_pct", label: "% Petani (Bagi Hasil)", type: "number",
+      cell: (r) => (r.profit_share_farmer_pct != null ? `${Number(r.profit_share_farmer_pct).toFixed(2)}%` : "—") },
+  ];
   const collectorFields: FieldDef[] = [
     { name: "collector_name", label: "Collector", required: true },
     { name: "kth_id", label: "KTH", type: "select", options: kthOpts },
@@ -196,6 +208,7 @@ export default function Settings() {
           {tab("warehouses", Warehouse, "Gudang")}
           {tab("collectors", Factory, "Collector")}
           {tab("reorder", Boxes, "Reorder")}
+          {tab("entities", Building2, "Entitas")}
         </TabsList>
 
         <TabsContent value="general"><GeneralTab /></TabsContent>
@@ -219,6 +232,18 @@ export default function Settings() {
         <TabsContent value="offtakers"><Card className="p-6"><MasterCrud endpoint="offtakers" title="Master Offtaker" fields={offtakerFields} /></Card></TabsContent>
         <TabsContent value="kth"><Card className="p-6"><MasterCrud endpoint="kth" title="Master KTH" fields={kthFields} /></Card></TabsContent>
         <TabsContent value="warehouses"><Card className="p-6"><MasterCrud endpoint="warehouses" title="Master Gudang" fields={warehouseFields} /></Card></TabsContent>
+        <TabsContent value="entities">
+          <Card className="p-6">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 mb-5">
+              <p className="text-xs text-emerald-800">
+                <strong>% Petani</strong> dipakai saat menghitung bagi hasil lahan Profit Sharing milik PT ini.
+                Porsi perusahaan = 100 − nilai ini. Sebuah penjualan boleh menimpanya sendiri.
+                Mengubah angka di sini <strong>tidak</strong> mengubah bagi hasil yang sudah tersimpan.
+              </p>
+            </div>
+            <MasterCrud endpoint="entities" title="Entitas (PT)" fields={entityFields} query={{ type: "all" }} />
+          </Card>
+        </TabsContent>
         <TabsContent value="collectors"><Card className="p-6"><MasterCrud endpoint="collectors" title="Master Collector" fields={collectorFields} /></Card></TabsContent>
         <TabsContent value="reorder"><Card className="p-6"><MasterCrud endpoint="reorder-levels" title="Reorder Level per Gudang" fields={reorderFields} /></Card></TabsContent>
       </Tabs>
