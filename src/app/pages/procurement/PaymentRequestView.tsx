@@ -193,9 +193,10 @@ export default function PaymentRequestView() {
                     </Button>
                   </div>
                   <div className="text-xs text-slate-500 leading-relaxed max-w-xs">
-                    <p className="font-semibold text-slate-600 mb-0.5">Kenapa harus persis</p>
-                    Kode ini punya karakter pemeriksa: satu huruf salah ketik akan ditolak sistem, bukan
-                    tercocokkan ke pembayaran lain.
+                    <p className="font-semibold text-slate-600 mb-0.5">Cara menulisnya</p>
+                    Huruf dan angkanya harus persis — ada karakter pemeriksa, jadi satu huruf salah akan
+                    ditolak sistem, bukan tercocokkan ke pembayaran lain. Spasinya bebas: boleh diketik
+                    <span className="font-mono"> PAY26 7K4Q3 </span> atau <span className="font-mono">PAY267K4Q3</span>.
                   </div>
                 </div>
 

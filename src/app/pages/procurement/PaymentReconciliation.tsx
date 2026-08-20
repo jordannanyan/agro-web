@@ -14,7 +14,7 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   FileSpreadsheet, Upload, CheckCircle2, AlertTriangle, HelpCircle, Copy, Check,
-  Clock, History, ArrowRight, X, Banknote,
+  Clock, History, ArrowRight, X, Banknote, Lock, Eye, EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../../components/ui/card";
@@ -103,6 +103,11 @@ export default function PaymentReconciliation() {
   const [applied, setApplied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<"upload" | "outstanding" | "history">("upload");
+  // Only for the encrypted exports the bank e-mails out. It is sent with the file
+  // and never stored — not here, not on the server — so it has to be re-typed if
+  // the same file is uploaded again.
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
   const { data: outstanding, refetch: refetchOutstanding } =
@@ -123,6 +128,9 @@ export default function PaymentReconciliation() {
     setBusy(true);
     try {
       const form = new FormData();
+      // Password before the file: multer fills req.body from the fields it has
+      // already read, and this ordering keeps it available however it is consumed.
+      if (password) form.append("password", password);
       form.append("file", file);
       setAnalysis(await api.upload<Analysis>("bank-statements/preview", form));
       setApplied(false);
@@ -137,6 +145,7 @@ export default function PaymentReconciliation() {
     setBusy(true);
     try {
       const form = new FormData();
+      if (password) form.append("password", password);
       form.append("file", file);
       const res = await api.upload<Analysis & { id: number }>("bank-statements", form);
       setAnalysis(res);
@@ -220,6 +229,33 @@ export default function PaymentReconciliation() {
                   disabled={!file || busy} onClick={preview}>
                   {busy && !applied ? "Membaca…" : "Periksa Kecocokan"}
                 </Button>
+              </div>
+
+              {/* E-statement yang dikirim bank lewat email biasanya terkunci. Kolom
+                  ini dibiarkan kosong untuk file biasa — bukan dua alur berbeda,
+                  cukup satu yang menyesuaikan filenya. */}
+              <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 flex-wrap">
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <label className="text-xs text-slate-500">Password file</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="kosongkan bila tidak terkunci"
+                    autoComplete="off"
+                    className="w-64 border border-slate-200 rounded-lg pl-3 pr-9 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
+                    title={showPassword ? "Sembunyikan" : "Tampilkan"}
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <span className="text-xs text-slate-400">dipakai sekali untuk membuka file, tidak disimpan</span>
               </div>
             </div>
           </Card>
