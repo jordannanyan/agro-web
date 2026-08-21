@@ -84,17 +84,15 @@ export default function StockOutList() {
                   <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer"
                     onClick={() => navigate(`/warehouse/stock-out/${r.id}`)}>
                     <td className="py-3 px-4 text-sm font-mono font-semibold text-orange-700 whitespace-nowrap">
+                      {/* SOH- documents were grouped out of the ledgers' own distribution
+                          lines rather than typed here, and they used to carry a
+                          "rekonstruksi" badge. The lines were then checked against the
+                          source: JNBS 2.035 rows / Rp 602.955.401 match to the rupiah,
+                          and SNBS's 1.066 rows differ only by the 502 kg that went to
+                          SNBS's own warehouse instead of to a plot. The content is the
+                          ledger's, so the badge came off. What is still true — nobody
+                          signed these out — the empty Petugas column already says. */}
                       {r.stock_out_number}
-                      {/* SOH- numbers were rebuilt from distributions that predate this
-                          screen: nobody issued or signed them, and the grouping is
-                          inferred from warehouse + date. Say so rather than let them
-                          pass as real documents. */}
-                      {r.stock_out_number?.startsWith("SOH-") && (
-                        <span title="Dibentuk otomatis dari distribusi lama — dikelompokkan per gudang & tanggal, bukan dokumen asli"
-                          className="ml-2 px-1.5 py-0.5 rounded text-xs font-semibold border bg-slate-100 text-slate-500 border-slate-200">
-                          rekonstruksi
-                        </span>
-                      )}
                     </td>
                     <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{r.stock_out_date}</td>
                     {!bound && <td className="py-3 px-4"><EntityTag name={r.entity_name} /></td>}
