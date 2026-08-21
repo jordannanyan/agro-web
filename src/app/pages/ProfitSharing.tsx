@@ -95,10 +95,11 @@ function PLTab() {
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-sm">
-              <p className="font-semibold text-amber-800">{negatives} dari {rows.length} lahan masih rugi.</p>
+              <p className="font-semibold text-amber-800">{negatives} dari {rows.length} lahan margin-nya masih negatif.</p>
               <p className="text-amber-700 mt-0.5">
-                Kerugian dibagi dengan persentase yang sama seperti keuntungan, lalu ditumpuk di
-                saldo tiap pihak. Uang baru bisa dibayarkan selama saldo petani positif.
+                Margin dibagi apa adanya — rugi pun ikut dibagi — lalu ditumpuk di saldo tiap pihak.
+                Pembayaran baru bisa jalan bila saldo petani positif <em>dan</em> margin lahan sudah
+                melampaui utangnya, sama seperti kolom Distributable di buku besar.
               </p>
             </div>
           </div>
@@ -107,12 +108,15 @@ function PLTab() {
       <Card className="p-0">
         <div className="p-5 border-b border-slate-100">
           <h3 className="text-slate-800 font-semibold">Profit &amp; Loss per Lahan</h3>
-          <p className="text-xs text-slate-400">Bagian penjualan − biaya olah − biaya jual − saprodi − biaya lahan</p>
+          <p className="text-xs text-slate-400">
+            Margin buku besar: bagian penjualan − harga beli − harvesting/kg − PNBP/kg.
+            Saprodi dan biaya lahan bukan biaya — keduanya utang yang menahan pembayaran.
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
-              {["Plot", "Petani", "Kg Terjual", "Bagian Jual", "B. Olah", "B. Jual", "Saprodi", "B. Lahan", "Total Biaya", "Net", "Dibayar ke Petani"].map((h) =>
+              {["Plot", "Petani", "Kg Terjual", "Bagian Jual", "Harga Beli", "Harvesting", "PNBP", "Margin", "Utang (saprodi+lahan)", "Dibayar ke Petani"].map((h) =>
                 <th key={h} className={th(h !== "Plot" && h !== "Petani")}>{h}</th>)}
             </tr></thead>
             <tbody>
@@ -124,12 +128,11 @@ function PLTab() {
                     <td className="py-3 px-4 text-sm text-slate-600">{r.farmer_name}</td>
                     <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{num(r.volume_sold)}</td>
                     <td className="py-3 px-4 text-right text-sm font-mono text-emerald-700">{fmtRp(r.total_revenue)}</td>
-                    <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(r.cost_processing)}</td>
-                    <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(r.cost_selling)}</td>
-                    <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(r.cost_saprodi)}</td>
-                    <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(r.cost_land)}</td>
-                    <td className="py-3 px-4 text-right text-sm font-mono text-amber-700">{fmtRp(r.total_investment)}</td>
+                    <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(r.cost_purchase)}</td>
+                    <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(r.cost_harvest)}</td>
+                    <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(r.cost_pnbp)}</td>
                     <td className={`py-3 px-4 text-right text-sm font-mono font-bold ${np >= 0 ? "text-emerald-700" : "text-red-600"}`}>{fmtRp(np)}</td>
+                    <td className="py-3 px-4 text-right text-sm font-mono text-amber-700">{fmtRp(r.debt_total)}</td>
                     <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{fmtRp(r.settled_farmer)}</td>
                   </tr>
                 );
@@ -140,12 +143,11 @@ function PLTab() {
                 <td className="py-3 px-4 text-sm font-bold text-slate-800" colSpan={2}>Total</td>
                 <td className="py-3 px-4 text-right text-sm font-mono font-bold text-slate-700">{num(sum("volume_sold"))}</td>
                 <td className="py-3 px-4 text-right text-sm font-mono font-bold text-emerald-700">{fmtRp(sum("total_revenue"))}</td>
-                <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(sum("cost_processing"))}</td>
-                <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(sum("cost_selling"))}</td>
-                <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(sum("cost_saprodi"))}</td>
-                <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(sum("cost_land"))}</td>
-                <td className="py-3 px-4 text-right text-sm font-mono font-bold text-amber-700">{fmtRp(sum("total_investment"))}</td>
+                <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(sum("cost_purchase"))}</td>
+                <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(sum("cost_harvest"))}</td>
+                <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(sum("cost_pnbp"))}</td>
                 <td className={`py-3 px-4 text-right text-sm font-mono font-bold ${sum("net_profit") >= 0 ? "text-emerald-700" : "text-red-600"}`}>{fmtRp(sum("net_profit"))}</td>
+                <td className="py-3 px-4 text-right text-sm font-mono font-bold text-amber-700">{fmtRp(sum("debt_total"))}</td>
                 <td className="py-3 px-4 text-right text-sm font-mono font-bold text-slate-800">{fmtRp(sum("settled_farmer"))}</td>
               </tr></tfoot>
             )}
@@ -259,7 +261,7 @@ function ShareTab() {
                       <td className="py-3 px-4 text-right text-sm font-mono text-blue-700">{pct(l.share_pct)}</td>
                       <td className="py-3 px-4 text-right text-sm font-mono text-emerald-700">{fmtRp(l.total_revenue)}</td>
                       <td className="py-3 px-4 text-right text-sm font-mono text-amber-700"
-                          title={`Olah ${fmtRp(l.cost_processing)} · Jual ${fmtRp(l.cost_selling)} · Saprodi ${fmtRp(l.cost_saprodi)} · Lahan ${fmtRp(l.cost_land)}`}>{fmtRp(l.total_investment)}</td>
+                          title={`Harga beli ${fmtRp(l.cost_purchase)} · Harvesting ${fmtRp(l.cost_harvest)} · PNBP ${fmtRp(l.cost_pnbp)}`}>{fmtRp(l.total_investment)}</td>
                       <td className={`py-3 px-4 text-right text-sm font-mono font-bold ${Number(l.net_profit) >= 0 ? "text-emerald-700" : "text-red-600"}`}>{fmtRp(l.net_profit)}</td>
                       <td className={`py-3 px-4 text-right text-sm font-mono font-semibold ${Number(l.value_farmer) >= 0 ? "text-slate-900" : "text-red-600"}`}>{fmtRp(l.value_farmer)}</td>
                       <td className={`py-3 px-4 text-right text-sm font-mono ${Number(l.value_kth) >= 0 ? "text-slate-600" : "text-red-500"}`}>{fmtRp(l.value_kth)}</td>
@@ -275,8 +277,9 @@ function ShareTab() {
             {/* Saprodi and land cost are standing balances per plot, so a settlement
                 only charges what earlier settlements have not already taken. */}
             <p className="text-xs text-slate-400">
-              <strong>Total Biaya</strong> hanya memuat biaya yang terjadi <em>sampai tanggal penjualan ini</em>
-              dan belum pernah dibebankan sebelumnya — arahkan kursor untuk rinciannya.
+              <strong>Total Biaya</strong> = harga beli + harvesting/kg + PNBP/kg, sesuai buku besar —
+              arahkan kursor untuk rinciannya. Saprodi dan biaya lahan <em>tidak</em> dikurangkan di sini;
+              keduanya utang yang menentukan boleh-tidaknya dibayarkan.
               <strong>Laba</strong> dibagi apa adanya: rugi pun ikut dibagi dengan persentase yang sama, lalu
               ditumpuk di <strong>Saldo Petani</strong>. <strong>Bisa Dibayar</strong> adalah saldo itu bila positif.
             </p>
