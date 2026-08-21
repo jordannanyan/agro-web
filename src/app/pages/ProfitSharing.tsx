@@ -281,7 +281,11 @@ function ShareTab() {
               arahkan kursor untuk rinciannya. Saprodi dan biaya lahan <em>tidak</em> dikurangkan di sini;
               keduanya utang yang menentukan boleh-tidaknya dibayarkan.
               <strong>Laba</strong> dibagi apa adanya: rugi pun ikut dibagi dengan persentase yang sama, lalu
-              ditumpuk di <strong>Saldo Petani</strong>. <strong>Bisa Dibayar</strong> adalah saldo itu bila positif.
+              ditumpuk di <strong>Saldo Petani</strong>.{" "}
+              <strong>Bisa Dibayar</strong> baru terisi setelah laba kumulatif lahan melampaui utangnya —
+              saldo positif saja tidak cukup. Aturannya mengikuti buku besar PT yang bersangkutan:
+              SNBS memotong utang dari basis lalu membagi persentasenya, JNBS memakai utang sebagai
+              saklar lalu membayarkan seluruh saldo.
             </p>
 
             <div className="flex items-center justify-between gap-4 flex-wrap">
