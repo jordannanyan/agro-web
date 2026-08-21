@@ -97,8 +97,8 @@ function PLTab() {
             <div className="text-sm">
               <p className="font-semibold text-amber-800">{negatives} dari {rows.length} lahan masih rugi.</p>
               <p className="text-amber-700 mt-0.5">
-                Biaya yang belum tertutup dibawa ke penjualan berikutnya dari lahan yang sama.
-                Selama lahan masih minus, bagian petani nol dan selisihnya ditanggung perusahaan.
+                Kerugian dibagi dengan persentase yang sama seperti keuntungan, lalu ditumpuk di
+                saldo tiap pihak. Uang baru bisa dibayarkan selama saldo petani positif.
               </p>
             </div>
           </div>
@@ -197,7 +197,9 @@ function ShareTab() {
 
   const lines: any[] = preview?.lines || [];
   const totalFarmer = lines.reduce((s, l) => s + Number(l.value_farmer || 0), 0);
+  const totalKth = lines.reduce((s, l) => s + Number(l.value_kth || 0), 0);
   const totalCompany = lines.reduce((s, l) => s + Number(l.value_company || 0), 0);
+  const totalPayable = lines.reduce((s, l) => s + Number(l.payable_farmer || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -245,7 +247,7 @@ function ShareTab() {
             <div className="overflow-x-auto border border-slate-100 rounded-xl">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
-                  {["Plot", "Petani", "Kg", "Porsi", "Bagian Jual", "B. Olah", "B. Jual", "Saprodi", "B. Lahan", "Bawaan", "Laba", "Petani", "Perusahaan"].map((h) =>
+                  {["Plot", "Petani", "Kg", "Porsi", "Bagian Jual", "Total Biaya", "Laba (NCF)", "Petani", "KTH", "Perusahaan", "Saldo Petani", "Bisa Dibayar"].map((h) =>
                     <th key={h} className={th(h !== "Plot" && h !== "Petani")}>{h}</th>)}
                 </tr></thead>
                 <tbody>
@@ -256,14 +258,14 @@ function ShareTab() {
                       <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{num(l.volume_share)}</td>
                       <td className="py-3 px-4 text-right text-sm font-mono text-blue-700">{pct(l.share_pct)}</td>
                       <td className="py-3 px-4 text-right text-sm font-mono text-emerald-700">{fmtRp(l.total_revenue)}</td>
-                      <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(l.cost_processing)}</td>
-                      <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(l.cost_selling)}</td>
-                      <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(l.cost_saprodi)}</td>
-                      <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{fmtRp(l.cost_land)}</td>
-                      <td className={`py-3 px-4 text-right text-sm font-mono ${Number(l.carry_in) < 0 ? "text-red-500" : "text-slate-400"}`}>{Number(l.carry_in) ? fmtRp(l.carry_in) : "—"}</td>
+                      <td className="py-3 px-4 text-right text-sm font-mono text-amber-700"
+                          title={`Olah ${fmtRp(l.cost_processing)} · Jual ${fmtRp(l.cost_selling)} · Saprodi ${fmtRp(l.cost_saprodi)} · Lahan ${fmtRp(l.cost_land)}`}>{fmtRp(l.total_investment)}</td>
                       <td className={`py-3 px-4 text-right text-sm font-mono font-bold ${Number(l.net_profit) >= 0 ? "text-emerald-700" : "text-red-600"}`}>{fmtRp(l.net_profit)}</td>
-                      <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-slate-900">{fmtRp(l.value_farmer)}</td>
-                      <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(l.value_company)}</td>
+                      <td className={`py-3 px-4 text-right text-sm font-mono font-semibold ${Number(l.value_farmer) >= 0 ? "text-slate-900" : "text-red-600"}`}>{fmtRp(l.value_farmer)}</td>
+                      <td className={`py-3 px-4 text-right text-sm font-mono ${Number(l.value_kth) >= 0 ? "text-slate-600" : "text-red-500"}`}>{fmtRp(l.value_kth)}</td>
+                      <td className={`py-3 px-4 text-right text-sm font-mono ${Number(l.value_company) >= 0 ? "text-slate-600" : "text-red-500"}`}>{fmtRp(l.value_company)}</td>
+                      <td className={`py-3 px-4 text-right text-sm font-mono ${Number(l.cum_farmer) >= 0 ? "text-slate-700" : "text-red-600"}`}>{fmtRp(l.cum_farmer)}</td>
+                      <td className="py-3 px-4 text-right text-sm font-mono font-bold text-emerald-700">{fmtRp(l.payable_farmer)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -273,9 +275,10 @@ function ShareTab() {
             {/* Saprodi and land cost are standing balances per plot, so a settlement
                 only charges what earlier settlements have not already taken. */}
             <p className="text-xs text-slate-400">
-              <strong>Saprodi</strong> dan <strong>B. Lahan</strong> adalah sisa yang belum pernah dibebankan pada
-              bagi hasil sebelumnya untuk lahan itu. <strong>Bawaan</strong> adalah kekurangan dari bagi hasil
-              sebelumnya yang ikut terbawa ke sini — selama masih minus, bagian petani nol.
+              <strong>Total Biaya</strong> hanya memuat biaya yang terjadi <em>sampai tanggal penjualan ini</em>
+              dan belum pernah dibebankan sebelumnya — arahkan kursor untuk rinciannya.
+              <strong>Laba</strong> dibagi apa adanya: rugi pun ikut dibagi dengan persentase yang sama, lalu
+              ditumpuk di <strong>Saldo Petani</strong>. <strong>Bisa Dibayar</strong> adalah saldo itu bila positif.
             </p>
 
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -285,8 +288,16 @@ function ShareTab() {
                   <span className="font-mono font-bold">{fmtRp(totalFarmer)}</span>
                 </div>
                 <div className="px-4 py-2 rounded-lg bg-slate-100">
+                  <span className="text-xs text-slate-500 block">KTH{preview.pct_kth ? ` (${pct(preview.pct_kth)} dari perusahaan)` : ""}</span>
+                  <span className={`font-mono font-bold ${totalKth >= 0 ? "text-slate-800" : "text-red-600"}`}>{fmtRp(totalKth)}</span>
+                </div>
+                <div className="px-4 py-2 rounded-lg bg-slate-100">
                   <span className="text-xs text-slate-500 block">Perusahaan</span>
                   <span className={`font-mono font-bold ${totalCompany >= 0 ? "text-slate-800" : "text-red-600"}`}>{fmtRp(totalCompany)}</span>
+                </div>
+                <div className="px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <span className="text-xs text-emerald-700 block">Bisa dibayar ke petani</span>
+                  <span className="font-mono font-bold text-emerald-700">{fmtRp(totalPayable)}</span>
                 </div>
               </div>
               <Button
@@ -309,8 +320,8 @@ function ShareTab() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
-              {["Periode", "Penjualan", "Plot", "Bagian Jual", "Total Biaya", "Bawaan", "Laba", "% Petani", "Petani", "Perusahaan", "Status"].map((h) =>
-                <th key={h} className={th(["Bagian Jual", "Total Biaya", "Bawaan", "Laba", "% Petani", "Petani", "Perusahaan"].includes(h))}>{h}</th>)}
+              {["Periode", "Penjualan", "Plot", "Bagian Jual", "Total Biaya", "Laba", "% Petani", "Petani", "KTH", "Perusahaan", "Saldo Petani", "Status"].map((h) =>
+                <th key={h} className={th(["Bagian Jual", "Total Biaya", "Laba", "% Petani", "Petani", "KTH", "Perusahaan", "Saldo Petani"].includes(h))}>{h}</th>)}
             </tr></thead>
             <tbody>
               {(shares || []).map((r) => (
@@ -320,11 +331,12 @@ function ShareTab() {
                   <td className="py-3 px-4 text-sm text-slate-700">{r.plot_id ?? "—"}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-emerald-700">{fmtRp(r.total_revenue)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-amber-700">{fmtRp(r.total_investment)}</td>
-                  <td className={`py-3 px-4 text-right text-sm font-mono ${Number(r.carry_in) < 0 ? "text-red-500" : "text-slate-400"}`}>{Number(r.carry_in) ? fmtRp(r.carry_in) : "—"}</td>
                   <td className={`py-3 px-4 text-right text-sm font-mono font-semibold ${Number(r.net_profit) >= 0 ? "text-emerald-700" : "text-red-600"}`}>{fmtRp(r.net_profit)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{pct(r.pct_farmer)}</td>
-                  <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-slate-900">{fmtRp(r.value_farmer)}</td>
+                  <td className={`py-3 px-4 text-right text-sm font-mono font-semibold ${Number(r.value_farmer) >= 0 ? "text-slate-900" : "text-red-600"}`}>{fmtRp(r.value_farmer)}</td>
+                  <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(r.value_kth)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(r.value_company)}</td>
+                  <td className={`py-3 px-4 text-right text-sm font-mono ${Number(r.cum_farmer) >= 0 ? "text-slate-700" : "text-red-600"}`}>{fmtRp(r.cum_farmer)}</td>
                   <td className="py-3 px-4 text-sm text-slate-600">{r.status}</td>
                 </tr>
               ))}

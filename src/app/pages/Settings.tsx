@@ -165,6 +165,8 @@ export default function Settings() {
       { value: "Operational", label: "Operational" }, { value: "Support", label: "Support" }, { value: "System", label: "System" }] },
     { name: "profit_share_farmer_pct", label: "% Petani (Bagi Hasil)", type: "number",
       cell: (r) => (r.profit_share_farmer_pct != null ? `${Number(r.profit_share_farmer_pct).toFixed(2)}%` : "—") },
+    { name: "profit_share_kth_pct", label: "% KTH (dari bagian perusahaan)", type: "number",
+      cell: (r) => (r.profit_share_kth_pct != null ? `${Number(r.profit_share_kth_pct).toFixed(2)}%` : "—") },
   ];
   const collectorFields: FieldDef[] = [
     { name: "collector_name", label: "Collector", required: true },
@@ -236,8 +238,10 @@ export default function Settings() {
           <Card className="p-6">
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 mb-5">
               <p className="text-xs text-emerald-800">
-                <strong>% Petani</strong> dipakai saat menghitung bagi hasil lahan Profit Sharing milik PT ini.
-                Porsi perusahaan = 100 − nilai ini. Sebuah penjualan boleh menimpanya sendiri.
+                <strong>% Petani</strong> dipakai saat menghitung bagi hasil lahan Profit Sharing milik PT ini;
+                porsi perusahaan = 100 − nilai ini, dan sebuah penjualan boleh menimpanya sendiri.
+                <strong>% KTH</strong> dipotong <em>dari</em> bagian perusahaan, bukan tambahan.
+                Model sumber (sheet “Hitungan Bagi Hasil”): petani <strong>30</strong>, KTH <strong>7</strong>.
                 Mengubah angka di sini <strong>tidak</strong> mengubah bagi hasil yang sudah tersimpan.
               </p>
             </div>
