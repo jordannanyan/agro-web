@@ -59,6 +59,13 @@ interface Summary {
 }
 
 interface Checks {
+  container: {
+    ok: boolean;
+    kind: "encrypted-ooxml" | "plain-ooxml" | "legacy-xls" | "csv" | "unknown";
+    encrypted: boolean;
+    crypto_profile_ok: boolean;
+    crypto: { cipher: string | null; chaining: string | null; hash: string | null; key_bits: number | null; spin_count: number | null; data_integrity: boolean } | null;
+  };
   bank_identity: { ok: boolean; resaved: boolean; application: string | null; creator: string | null; title: string | null };
   account_number: string | null;
   account_known: boolean;
@@ -74,10 +81,33 @@ interface StatementInfo {
   total_in: number | null; total_out: number | null;
 }
 
+interface PolicyFinding {
+  code: "container" | "crypto_profile" | "bank_identity" | "account" | "arithmetic" | "duplicate_file";
+  level: "reject" | "warn";
+  title: string;
+  message: string;
+}
+
+/** The server's verdict on the file. The Apply button follows this, nothing else. */
+interface Policy {
+  ok: boolean;
+  strict: boolean;
+  findings: PolicyFinding[];
+}
+
 interface Analysis {
   file_name: string; summary: Summary; lines: Line[];
-  statement?: StatementInfo; checks?: Checks;
+  statement?: StatementInfo; checks?: Checks; policy?: Policy;
 }
+
+/** How the file arrived, in the words a person would use for it. */
+const CONTAINER_LABEL: Record<Checks["container"]["kind"], string> = {
+  "encrypted-ooxml": "berkas terkunci password dari bank",
+  "plain-ooxml": "workbook Excel biasa, tanpa password",
+  "legacy-xls": "Excel format lama (.xls), tanpa password",
+  csv: "CSV",
+  unknown: "tidak dikenali",
+};
 
 /**
  * Where the file came from, as far as a file can say.
@@ -87,9 +117,22 @@ interface Analysis {
  * What it does show is that the numbers inside agree with each other — which an
  * edited file cannot manage without a great deal of care.
  */
-function ProvenancePanel({ checks, statement }: { checks: Checks; statement?: StatementInfo }) {
-  const arith = checks.arithmetic_ok;
+function ProvenancePanel({ checks, statement, policy }: { checks: Checks; statement?: StatementInfo; policy?: Policy }) {
+  const accepted = policy ? policy.ok : checks.arithmetic_ok;
+  const rejections = policy?.findings.filter((f) => f.level === "reject") ?? [];
+  const warnings = policy?.findings.filter((f) => f.level === "warn") ?? [];
   const rows = [
+    {
+      ok: checks.container.ok,
+      label: "Wadah file",
+      detail: CONTAINER_LABEL[checks.container.kind]
+        + (checks.container.crypto ? ` · ${checks.container.crypto.cipher}-${checks.container.crypto.key_bits}/${checks.container.crypto.hash}` : ""),
+      note: checks.container.ok
+        ? "Terkunci dengan parameter enkripsi yang dipakai Livin. Ini yang paling sulit ditiru tanpa sengaja: file yang pernah dibuka dan disimpan ulang tidak kembali seperti ini."
+        : checks.container.kind === "encrypted-ooxml"
+          ? "Terkunci, tetapi bukan dengan kunci buatan Livin — file ini dikunci ulang oleh aplikasi lain."
+          : "E-statement Livin selalu terkunci password. File ini tidak.",
+    },
     {
       ok: checks.bank_identity.ok,
       label: "Dibuat oleh",
@@ -125,25 +168,46 @@ function ProvenancePanel({ checks, statement }: { checks: Checks; statement?: St
   ];
 
   return (
-    <Card className={`p-5 ${arith ? "border-slate-200" : "border-red-300 bg-red-50/50"}`}>
+    <Card className={`p-5 ${accepted ? "border-slate-200" : "border-red-300 bg-red-50/50"}`}>
       <div className="flex items-start gap-2 mb-3">
-        {arith ? <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" /> : <ShieldAlert className="w-5 h-5 text-red-600 shrink-0" />}
+        {accepted ? <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" /> : <ShieldAlert className="w-5 h-5 text-red-600 shrink-0" />}
         <div>
           <h3 className="text-slate-800 font-semibold text-sm">
-            {!arith
-              ? "File ini tidak lolos pemeriksaan"
-              : checks.bank_identity.ok
-                ? "Isi file konsisten"
-                : "Angka konsisten, tetapi file bukan berkas mentah dari bank"}
+            {!accepted
+              ? "File ini akan ditolak"
+              : warnings.length
+                ? "Diterima, dengan catatan"
+                : "File ini berkas mentah dari bank"}
           </h3>
           <p className="text-xs text-slate-500">
-            {!arith
-              ? "Impor ditolak: angka di dalam file bertentangan satu sama lain. Unduh ulang rekening koran langsung dari bank."
-              : "Tidak ada cara membuktikan file benar-benar dari bank — spreadsheet tidak ditandatangani secara digital. Yang bisa diperiksa adalah apakah angkanya saling cocok; mengubah satu nominal memaksa pengubahnya memperbaiki seluruh kolom saldo dan empat angka ringkasan bank sekaligus."}
+            {!accepted
+              ? "Impor tidak bisa diterapkan selama alasan di bawah masih ada."
+              : "Tidak ada cara membuktikan file benar-benar dari bank — spreadsheet tidak ditandatangani secara digital. Yang bisa diperiksa: file masih terkunci dengan kunci buatan bank, properti dokumen masih menyebut bank sebagai pembuatnya, dan angkanya saling cocok. Mengubah satu nominal memaksa pengubahnya memperbaiki seluruh kolom saldo dan empat angka ringkasan bank sekaligus, lalu mengunci ulang file dengan cara yang sama."}
             {statement?.period ? ` Periode: ${statement.period}.` : ""}
           </p>
         </div>
       </div>
+
+      {/* The reasons first: they are what the person has to act on, and the
+          per-check grid below only explains them. */}
+      {rejections.map((f) => (
+        <div key={f.code} className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 mb-2">
+          <div className="flex items-center gap-1.5">
+            <ShieldAlert className="w-3.5 h-3.5 text-red-600 shrink-0" />
+            <span className="text-xs font-bold text-red-700 uppercase tracking-wide">Ditolak — {f.title}</span>
+          </div>
+          <p className="text-sm text-red-800 mt-0.5">{f.message}</p>
+        </div>
+      ))}
+      {warnings.map((f) => (
+        <div key={f.code} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 mb-2">
+          <div className="flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">{f.title}</span>
+          </div>
+          <p className="text-sm text-amber-800 mt-0.5">{f.message}</p>
+        </div>
+      ))}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {rows.map((r) => (
           <div key={r.label} className={`rounded-xl px-3 py-2 border ${r.ok ? "bg-white border-slate-200" : "bg-red-50 border-red-200"}`}>
@@ -360,7 +424,7 @@ export default function PaymentReconciliation() {
             </div>
           </Card>
 
-          {analysis?.checks && <ProvenancePanel checks={analysis.checks} statement={analysis.statement} />}
+          {analysis?.checks && <ProvenancePanel checks={analysis.checks} statement={analysis.statement} policy={analysis.policy} />}
 
           {s && (
             <>
@@ -375,7 +439,9 @@ export default function PaymentReconciliation() {
               {!applied && (
                 <Card className="p-4 flex items-center justify-between gap-4 border-emerald-200 bg-emerald-50/40">
                   <p className="text-sm text-slate-700">
-                    {s.will_pay > 0
+                    {analysis?.policy?.ok === false
+                      ? <>File ini ditolak, jadi tidak ada yang akan diubah. Perbaiki alasan di atas — biasanya cukup dengan mengunduh ulang rekening koran dari Livin dan mengunggahnya apa adanya.</>
+                      : s.will_pay > 0
                       ? <>Belum ada yang diubah. Menerapkan file ini akan menandai <span className="font-bold">{s.will_pay} payment request</span> menjadi Paid.</>
                       : <>Tidak ada baris yang memenuhi syarat pelunasan pada file ini.</>}
                     <span className="block text-xs text-slate-500 mt-0.5">
@@ -383,7 +449,7 @@ export default function PaymentReconciliation() {
                     </span>
                   </p>
                   <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
-                    disabled={busy || s.will_pay === 0 || analysis?.checks?.arithmetic_ok === false} onClick={apply}>
+                    disabled={busy || s.will_pay === 0 || analysis?.policy?.ok === false} onClick={apply}>
                     <Banknote className="w-4 h-4 mr-1.5" />{busy ? "Memproses…" : "Terapkan & Tandai Paid"}
                   </Button>
                 </Card>
