@@ -11,6 +11,9 @@ import PaymentRequestView from "./pages/procurement/PaymentRequestView";
 import VendorList from "./pages/procurement/VendorList";
 import ProcurementStockList from "./pages/procurement/ProcurementStockList";
 import PaymentReconciliation from "./pages/procurement/PaymentReconciliation";
+import ReimbursementList from "./pages/reimbursement/ReimbursementList";
+import ReimbursementCreate from "./pages/reimbursement/ReimbursementCreate";
+import ReimbursementView from "./pages/reimbursement/ReimbursementView";
 import MapMonitoring from "./pages/MapMonitoring";
 import WarehouseDashboardSimple from "./pages/warehouse/WarehouseDashboardSimple";
 import StockManagement from "./pages/warehouse/StockManagement";
@@ -60,6 +63,12 @@ export const router = createBrowserRouter([
       { path: "procurement/payreq/create",     Component: PaymentRequestCreate },
       { path: "procurement/payreq/:id/edit",   Component: PaymentRequestCreate },
       { path: "procurement/payreq/:id",        Component: PaymentRequestView },
+
+      // ── Reimbursement (bayar petani lewat KTH) ────────────────────────────
+      { path: "reimbursement",                 Component: ReimbursementList },
+      { path: "reimbursement/create",          Component: ReimbursementCreate },
+      { path: "reimbursement/:id/edit",        Component: ReimbursementCreate },
+      { path: "reimbursement/:id",             Component: ReimbursementView },
 
       // ── Warehouse sub-pages ───────────────────────────────────────────────
       { path: "warehouse",                     Component: WarehouseDashboardSimple },

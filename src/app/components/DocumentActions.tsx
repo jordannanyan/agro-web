@@ -15,12 +15,14 @@ const ENDPOINT: Record<DocType, string> = {
   PR: "purchase-requests",
   PO: "purchase-orders",
   PayReq: "payment-requests",
+  Reimbursement: "reimbursements",
 };
 
 const EDIT_PATH: Record<DocType, string> = {
   PR: "/procurement/pr",
   PO: "/procurement/po",
   PayReq: "/procurement/payreq",
+  Reimbursement: "/reimbursement",
 };
 
 /**

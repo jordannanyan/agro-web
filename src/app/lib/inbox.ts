@@ -14,7 +14,7 @@ import { api } from "./api";
 export interface InboxBucket {
   approval: number;
   revision: number;
-  /** PayReq only: approved requests still waiting for the cash to be released. */
+  /** Payment documents only: approved requests still waiting for the cash. */
   payment?: number;
   total: number;
 }
@@ -23,6 +23,7 @@ export interface InboxCounts {
   PR: InboxBucket;
   PO: InboxBucket;
   PayReq: InboxBucket;
+  Reimbursement: InboxBucket;
   total: number;
 }
 
@@ -30,6 +31,7 @@ const EMPTY: InboxCounts = {
   PR: { approval: 0, revision: 0, total: 0 },
   PO: { approval: 0, revision: 0, total: 0 },
   PayReq: { approval: 0, revision: 0, payment: 0, total: 0 },
+  Reimbursement: { approval: 0, revision: 0, payment: 0, total: 0 },
   total: 0,
 };
 

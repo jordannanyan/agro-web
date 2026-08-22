@@ -8,7 +8,7 @@ import { Button } from "./ui/button";
 interface Attachment { id: number; category: string | null; subcategory: string | null; file_path: string; created_at: string | null; }
 
 export function DocumentAttachments({ docType, docId, categories }: {
-  docType: "PR" | "PO" | "PayReq";
+  docType: "PR" | "PO" | "PayReq" | "Reimbursement";
   docId: number;
   categories?: string[];
 }) {
@@ -17,16 +17,19 @@ export function DocumentAttachments({ docType, docId, categories }: {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Several at once. A reimbursement arrives as a stack — the signed farmer list,
+  // a photo of each receipt, the transfer slip — and one round trip per file is how
+  // people end up attaching three of the five.
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     const form = new FormData();
-    form.append("file", file);
+    for (const f of files) form.append("files", f);
     if (category) form.append("category", category);
     setUploading(true);
     try {
       await api.upload(`documents/${docType}/${docId}/attachments`, form);
-      toast.success("Lampiran diunggah");
+      toast.success(files.length > 1 ? `${files.length} lampiran diunggah` : "Lampiran diunggah");
       refetch();
     } catch (err: any) {
       toast.error(err?.message || "Gagal mengunggah");
@@ -58,7 +61,7 @@ export function DocumentAttachments({ docType, docId, categories }: {
           <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}>
             <Upload className="w-4 h-4 mr-1.5" />{uploading ? "Mengunggah…" : "Upload"}
           </Button>
-          <input ref={fileRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={onFile} />
+          <input ref={fileRef} type="file" multiple className="hidden" accept="image/*,application/pdf" onChange={onFile} />
         </div>
       </div>
 

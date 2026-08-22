@@ -228,6 +228,9 @@ interface Outstanding {
   id: number; payreq_number: string; payment_code: string | null; amount: number;
   beneficiary_name: string | null; bank_name: string | null; entity_name: string | null;
   estimated_pay_date: string | null; age_days: number;
+  /** Reimbursements are chased from this same list — the link has to go elsewhere. */
+  payreq_kind?: "Procurement" | "Reimbursement";
+  kth_name?: string | null;
 }
 
 interface ImportRow {
@@ -541,9 +544,17 @@ export default function PaymentReconciliation() {
                 {(outstanding || []).map((o) => (
                   <tr key={o.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                     <td className="py-3 px-4 text-sm">
-                      <button onClick={() => navigate(`/procurement/payreq/${o.id}`)} className="font-mono text-emerald-700 hover:underline">
+                      <button
+                        onClick={() => navigate(o.payreq_kind === "Reimbursement"
+                          ? `/reimbursement/${o.id}` : `/procurement/payreq/${o.id}`)}
+                        className="font-mono text-emerald-700 hover:underline">
                         {o.payreq_number}
                       </button>
+                      {o.payreq_kind === "Reimbursement" && (
+                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded border border-teal-200 bg-teal-50 text-teal-700 text-[10px] font-semibold uppercase tracking-wide">
+                          petani
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       {o.payment_code ? (
@@ -558,7 +569,12 @@ export default function PaymentReconciliation() {
                       ) : <span className="text-slate-400 text-sm">—</span>}
                     </td>
                     <td className="py-3 px-4 text-sm text-slate-600">{o.entity_name || "—"}</td>
-                    <td className="py-3 px-4 text-sm text-slate-600">{o.beneficiary_name || "—"}</td>
+                    <td className="py-3 px-4 text-sm text-slate-600">
+                      {o.beneficiary_name || "—"}
+                      {o.payreq_kind === "Reimbursement" && o.kth_name && (
+                        <span className="block text-xs text-slate-400">{o.kth_name}</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-sm text-right font-mono font-semibold text-slate-900">{fmtRp(o.amount)}</td>
                     <td className="py-3 px-4">
                       <span className={`inline-flex items-center gap-1 text-xs font-semibold ${o.age_days >= 14 ? "text-red-600" : o.age_days >= 7 ? "text-amber-600" : "text-slate-500"}`}>

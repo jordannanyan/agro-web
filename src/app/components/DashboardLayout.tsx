@@ -20,6 +20,7 @@ import {
   LogOut,
   TrendingUp,
   Lock,
+  HandCoins,
 } from "lucide-react";
 import { useAuth, initials } from "../store/AuthContext";
 import { canAccessPath } from "../lib/permissions";
@@ -95,17 +96,21 @@ const menuItems = [
       { id: "ps-ps",         label: "Profit Sharing",         path: "/profit-sharing/ps" },
     ],
   },
+  // Bukan bagian Procurement: tidak ada yang dibeli, dan yang mengajukannya Field
+  // Admin — orang yang tidak boleh masuk ke menu Procurement sama sekali.
+  { id: "reimbursement", icon: HandCoins, label: "Reimbursement Petani", path: "/reimbursement" },
   { id: "map", icon: MapIcon, label: "Map Monitoring", path: "/map" },
   { id: "reports", icon: FileText, label: "Laporan", path: "/reports" },
   { id: "settings", icon: Settings, label: "Settings", path: "/settings" },
 ];
 
-// Which menu entry owns which count. Only the three procurement documents have an
-// approval chain, so only they can be waiting on anybody.
+// Which menu entry owns which count. Only documents with an approval chain can be
+// waiting on anybody.
 const INBOX_PATHS: Record<string, keyof Omit<InboxCounts, "total">> = {
   "/procurement/purchase-request": "PR",
   "/procurement/purchase-order": "PO",
   "/procurement/payment-request": "PayReq",
+  "/reimbursement": "Reimbursement",
 };
 
 /** Spell out what the number is made of, for the badge's tooltip. */

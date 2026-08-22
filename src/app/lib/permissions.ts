@@ -66,6 +66,10 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   { prefix: "/procurement/stock-list",       roles: ABOVE_FIELD_ADMIN },
   { prefix: "/procurement",                  roles: ABOVE_FIELD_ADMIN },
 
+  // Reimbursement pays farmers, so the Field Admin who deals with the KTH files it.
+  // Finance Staff is here for the same reason as on PayReq: they release the cash.
+  { prefix: "/reimbursement",  roles: [...BUSINESS_CHAIN, ROLE.FINANCE_STAFF] },
+
   { prefix: "/transaction",    roles: BUSINESS_CHAIN },
   // Field Admin handles stock in/out (Bambang at SNBS, Alfina at JNBS).
   { prefix: "/warehouse",      roles: BUSINESS_CHAIN },
@@ -148,7 +152,7 @@ export function canOverridePayment(roleCode: string | null | undefined): boolean
 // exactly the same rule; these helpers only decide what to put on screen.
 // -----------------------------------------------------------------------------
 
-export type DocType = "PR" | "PO" | "PayReq";
+export type DocType = "PR" | "PO" | "PayReq" | "Reimbursement";
 
 export const EDITABLE_STATUSES = ["Draft", "Revision"];
 
@@ -157,6 +161,8 @@ const WRITERS: Record<DocType, Role[]> = {
   PR: [ROLE.FIELD_ADMIN, ROLE.PROJECT_MANAGER, ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
   PO: [ROLE.PROCUREMENT, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
   PayReq: [ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
+  // Nothing is procured on a reimbursement, so Procurement does not raise it.
+  Reimbursement: [ROLE.FIELD_ADMIN, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.SUPER_ADMIN],
 };
 
 /** Who files each kind of document when the chain has not been seeded yet. */
@@ -164,6 +170,7 @@ const DEFAULT_REQUESTER: Record<DocType, Role> = {
   PR: ROLE.FIELD_ADMIN,
   PO: ROLE.PROCUREMENT,
   PayReq: ROLE.PROCUREMENT,
+  Reimbursement: ROLE.FIELD_ADMIN,
 };
 
 export interface StepLike {
