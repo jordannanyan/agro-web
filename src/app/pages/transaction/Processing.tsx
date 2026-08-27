@@ -18,6 +18,7 @@ interface Warehouse { id: number; warehouse_name: string; }
 interface PurchasingLite { id: number; date: string; quantity: number; receipt_invoice: string | null; scheme: string; commodity?: { commodities_name: string } | null; farmer?: { farmer_name: string } | null; collector?: { collector_name: string } | null; }
 interface ProcessingRow {
   id: number; processing_code: string; date: string; status: string; volume_input: number; volume_output: number;
+  processing_cost_per_kg: number | null;
   total_processing_cost: number; loss: number; commodity?: { id: number; commodities_name: string } | null; warehouse?: { id: number; warehouse_name: string } | null;
 }
 
@@ -36,6 +37,7 @@ function ProcessingModal({ onClose, onSaved, commodities, warehouses, purchasing
   const [warehouseId, setWarehouseId] = useState(editRow?.warehouse?.id ? String(editRow.warehouse.id) : "");
   const [volOutput, setVolOutput] = useState(editRow?.volume_output != null ? String(editRow.volume_output) : "");
   const [cost, setCost] = useState(editRow?.total_processing_cost != null ? String(editRow.total_processing_cost) : "");
+  const [costPerKg, setCostPerKg] = useState(editRow?.processing_cost_per_kg != null ? String(editRow.processing_cost_per_kg) : "");
   const [status, setStatus] = useState(editRow?.status ?? "open");
   const [picked, setPicked] = useState<Record<number, string>>({}); // purchasing_id -> volume
   const [saving, setSaving] = useState(false);
@@ -54,6 +56,12 @@ function ProcessingModal({ onClose, onSaved, commodities, warehouses, purchasing
   }, [editRow]);
 
   const volInput = useMemo(() => Object.values(picked).reduce((s, v) => s + (parseFloat(v) || 0), 0), [picked]);
+  // Priced per kilo of input, so the total moves with the batch: tick one more
+  // purchase and it recomputes here exactly as the server will store it.
+  const perKgNum = costPerKg.trim() === "" ? null : Number(costPerKg);
+  const derivedCost = perKgNum != null && Number.isFinite(perKgNum)
+    ? Math.round(perKgNum * volInput * 100) / 100
+    : null;
   const selectCls = "w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white";
 
   function toggle(p: PurchasingLite) {
@@ -74,7 +82,11 @@ function ProcessingModal({ onClose, onSaved, commodities, warehouses, purchasing
         processing_code: code, date, commodities_id: Number(commodityId),
         warehouse_id: warehouseId ? Number(warehouseId) : null,
         volume_input: volInput, volume_output: Number(volOutput) || 0,
-        total_processing_cost: Number(cost) || 0, status, purchasings: purchasingsPayload,
+        processing_cost_per_kg: perKgNum,
+        // Sent for the lump-sum case only; the server recomputes it whenever a
+        // per-kilo price is present.
+        total_processing_cost: derivedCost != null ? derivedCost : (Number(cost) || 0),
+        status, purchasings: purchasingsPayload,
       };
       if (isEdit) await api.put(`processing/${editRow!.id}`, body);
       else await api.post("processing", body);
@@ -97,7 +109,11 @@ function ProcessingModal({ onClose, onSaved, commodities, warehouses, purchasing
             <div><Label className="text-xs text-slate-600 mb-1.5 block">Komoditas *</Label><select value={commodityId} onChange={(e) => setCommodityId(e.target.value)} className={selectCls}><option value="">—</option>{commodities.map((c) => <option key={c.id} value={c.id}>{c.commodities_name}</option>)}</select></div>
             <div><Label className="text-xs text-slate-600 mb-1.5 block">Gudang</Label><select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={selectCls}><option value="">—</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}</select></div>
             <div><Label className="text-xs text-slate-600 mb-1.5 block">Status</Label><select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}><option value="open">Open</option><option value="processing">Processing</option><option value="closed">Closed</option></select></div>
-            <div><Label className="text-xs text-slate-600 mb-1.5 block">Biaya Olah (Rp)</Label><Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" /></div>
+            <div>
+              <Label className="text-xs text-slate-600 mb-1.5 block">Biaya per Kg (Rp)</Label>
+              <Input type="number" value={costPerKg} onChange={(e) => setCostPerKg(e.target.value)} placeholder="0" />
+              <p className="text-[11px] text-slate-400 mt-1">Dikali volume input</p>
+            </div>
           </div>
 
           <div>
@@ -125,6 +141,23 @@ function ProcessingModal({ onClose, onSaved, commodities, warehouses, purchasing
             <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-50 border border-slate-200"><span className="text-sm text-slate-600">Total Vol Input</span><span className="font-mono font-semibold text-slate-800">{num(volInput)} Kg</span></div>
             <div><Label className="text-xs text-slate-600 mb-1.5 block">Volume Output (Kg)</Label><Input type="number" value={volOutput} onChange={(e) => setVolOutput(e.target.value)} placeholder="0" /></div>
           </div>
+
+          {/* Total cost: derived while a per-kilo price is given, typed by hand
+              otherwise — batches imported before this field have only a lump sum. */}
+          {derivedCost != null ? (
+            <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200">
+              <span className="text-sm text-emerald-800">
+                Total Biaya Olah
+                <span className="text-xs text-emerald-600"> · {fmtRp(perKgNum || 0)}/Kg × {num(volInput)} Kg</span>
+              </span>
+              <span className="font-mono font-bold text-emerald-700">{fmtRp(derivedCost)}</span>
+            </div>
+          ) : (
+            <div>
+              <Label className="text-xs text-slate-600 mb-1.5 block">Total Biaya Olah (Rp) — tanpa biaya per Kg</Label>
+              <Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" />
+            </div>
+          )}
         </div>
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3">
           <Button variant="outline" onClick={onClose} disabled={saving}>Batal</Button>
@@ -168,8 +201,8 @@ export default function Processing() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
-              {["Kode", "Tanggal", "Komoditas", "Gudang", "Vol Input", "Vol Output", "Loss", "Biaya", "Status", ""].map((h) => (
-                <th key={h} className={`${["Vol Input", "Vol Output", "Loss", "Biaya"].includes(h) ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
+              {["Kode", "Tanggal", "Komoditas", "Gudang", "Vol Input", "Vol Output", "Loss", "Biaya/Kg", "Total Biaya", "Status", ""].map((h) => (
+                <th key={h} className={`${["Vol Input", "Vol Output", "Loss", "Biaya/Kg", "Total Biaya"].includes(h) ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -182,6 +215,7 @@ export default function Processing() {
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{num(r.volume_input)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{num(r.volume_output)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-red-500">{r.status === "open" ? "—" : num(r.loss)}</td>
+                  <td className="py-3 px-4 text-right text-sm font-mono text-slate-500">{r.processing_cost_per_kg != null ? fmtRp(r.processing_cost_per_kg) : "—"}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{fmtRp(r.total_processing_cost)}</td>
                   <td className="py-3 px-4"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border capitalize ${statusBadge(r.status)}`}>{r.status}</span></td>
                   <td className="py-3 px-4"><div className="flex items-center justify-end gap-1"><Button size="sm" variant="ghost" onClick={() => { setEditRow(r); setShowModal(true); }}><Pencil className="w-4 h-4" /></Button><Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => remove(r.id)}><Trash2 className="w-4 h-4" /></Button></div></td>
