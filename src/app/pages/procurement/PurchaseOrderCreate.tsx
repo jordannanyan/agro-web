@@ -29,6 +29,11 @@ export default function PurchaseOrderCreate() {
   const [prId, setPrId] = useState("");
   const [vendorId, setVendorId] = useState("");
   const [budgetCodeId, setBudgetCodeId] = useState("");
+  // Budget code is chosen once in the chain. A request already carries one per
+  // item, so an order raised from it follows that instead of asking again; the
+  // field only opens up when the request's items disagree or carry none.
+  const [srcBudget, setSrcBudget] = useState<{ id: number | null; code: string | null }>({ id: null, code: null });
+  const [overrideBudget, setOverrideBudget] = useState(false);
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
   const [terms, setTerms] = useState("");
@@ -79,6 +84,16 @@ export default function PurchaseOrderCreate() {
             key: rid(), pr_item_id: it.id, description: it.description,
             order_qty: String(it.quantity ?? ""), unit_price: String(it.unit_cost ?? ""),
           })));
+          // One code for the order, so it can only be taken over when every item
+          // of the request agrees on it.
+          const ids = [...new Set(pr.items.map((it: any) => it.budget_code_id).filter((v: any) => v != null))];
+          const codes = [...new Set(pr.items.map((it: any) => it.budget_code).filter((v: any) => v != null))];
+          if (ids.length === 1) {
+            setSrcBudget({ id: Number(ids[0]), code: (codes[0] as string) ?? null });
+            setBudgetCodeId((prev) => prev || String(ids[0]));
+          } else {
+            setSrcBudget({ id: null, code: null });
+          }
         }
       } catch { /* ignore */ }
     })();
@@ -164,9 +179,21 @@ export default function PurchaseOrderCreate() {
             </div>
             <div>
               <label className="text-xs text-slate-500 font-medium mb-1.5 block">Budget Code</label>
-              <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}>
-                <option value="">—</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}
-              </select>
+              {srcBudget.id != null && !overrideBudget ? (
+                <>
+                  <div className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm bg-slate-50 font-mono text-slate-700">
+                    {(budgetCodes || []).find((b) => String(b.id) === budgetCodeId)?.code || srcBudget.code || "—"}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Mengikuti PR sumber.{" "}
+                    <button type="button" onClick={() => setOverrideBudget(true)} className="text-emerald-600 hover:underline">Ubah</button>
+                  </p>
+                </>
+              ) : (
+                <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}>
+                  <option value="">—</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}
+                </select>
+              )}
             </div>
             <div><label className="text-xs text-slate-500 font-medium mb-1.5 block">Tanggal Order</label><Input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} /></div>
             <div><label className="text-xs text-slate-500 font-medium mb-1.5 block">Jatuh Tempo</label><Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>

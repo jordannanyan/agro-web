@@ -5,12 +5,19 @@ import { api } from "../lib/api";
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
+/** The one value a list of request items agrees on, or null when they differ. */
+function singleBudgetCode<T>(items: any[] | undefined, field: string): T | null {
+  const seen = new Set((items || []).map((it) => it?.[field]).filter((v) => v != null));
+  return seen.size === 1 ? ([...seen][0] as T) : null;
+}
+
 interface PRItem {
   id: number; description: string; budget_code: string | null; unit_name: string | null;
   quantity: number; unit_cost: number; total_cost: number; sapropdi_name: string | null;
 }
 interface POItem {
   id: number; pr_item_description: string | null; order_qty: number; unit_price: number; total: number;
+  sapropdi_id: number | null; sapropdi_name: string | null; unit_name: string | null;
 }
 
 /**
@@ -29,10 +36,16 @@ export function SourceDocumentPreview({
   docType: "PR" | "PO";
   docId: string | number | null | undefined;
   /**
-   * Reports the source's grand total once it is known, so a form can offer it as
-   * the amount to pay without fetching the same document a second time.
+   * Reports what the source says once it is known, so a form can follow it without
+   * fetching the same document a second time: the total to offer as the amount to
+   * pay, the budget code already chosen upstream, and the lines themselves (Stock
+   * In receives against them).
    */
-  onLoaded?: (info: { grandTotal: number; number: string | null }) => void;
+  onLoaded?: (info: {
+    grandTotal: number; number: string | null;
+    budgetCodeId: number | null; budgetCode: string | null;
+    items: any[];
+  }) => void;
 }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -53,6 +66,10 @@ export function SourceDocumentPreview({
             ? Number(res?.grand_total || 0)
             : Number(res?.totals?.grand_total || 0),
           number: (docType === "PR" ? res?.pr_number : res?.po_number) ?? null,
+          // A PR carries a code per item, so it only answers when they agree.
+          budgetCodeId: docType === "PO" ? (res?.budget_code_id ?? null) : singleBudgetCode(res?.items, "budget_code_id"),
+          budgetCode: docType === "PO" ? (res?.budget_code ?? null) : singleBudgetCode(res?.items, "budget_code"),
+          items: Array.isArray(res?.items) ? res.items : [],
         });
       } catch (e: any) {
         // A source in another entity is refused by the API — say so plainly rather
@@ -74,6 +91,8 @@ export function SourceDocumentPreview({
   const number = isPR ? data?.pr_number : data?.po_number;
   const items: (PRItem | POItem)[] = data?.items || [];
   const grandTotal = isPR ? Number(data?.grand_total || 0) : Number(data?.totals?.grand_total || 0);
+  // Columns: description, [budget on a PR], saprodi, unit, qty, price, total.
+  const colCount = isPR ? 7 : 6;
 
   const th = "py-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide";
 
@@ -85,11 +104,20 @@ export function SourceDocumentPreview({
           Detail Barang — {isPR ? "Purchase Request" : "Purchase Order"}
           {number && <span className="font-mono text-slate-700 normal-case">{number}</span>}
         </h2>
-        {data?.entity_name && (
-          <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-slate-50 text-slate-600 border-slate-200">
-            {data.entity_name}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {/* A PO holds one budget code for the whole order — say which, so the next
+              document in the chain can simply follow it. */}
+          {!isPR && data?.budget_code && (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200 font-mono">
+              {data.budget_code}
+            </span>
+          )}
+          {data?.entity_name && (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-slate-50 text-slate-600 border-slate-200">
+              {data.entity_name}
+            </span>
+          )}
+        </div>
       </div>
 
       {loading && <p className="text-sm text-slate-400 py-4">Memuat detail…</p>}
@@ -108,8 +136,8 @@ export function SourceDocumentPreview({
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className={`${th} text-left`}>Deskripsi</th>
                 {isPR && <th className={`${th} text-left`}>Budget</th>}
-                {isPR && <th className={`${th} text-left`}>Saprodi</th>}
-                {isPR && <th className={`${th} text-left`}>Unit</th>}
+                <th className={`${th} text-left`}>Saprodi</th>
+                <th className={`${th} text-left`}>Unit</th>
                 <th className={`${th} text-right`}>Qty</th>
                 <th className={`${th} text-right`}>Harga</th>
                 <th className={`${th} text-right`}>Total</th>
@@ -122,8 +150,8 @@ export function SourceDocumentPreview({
                     {isPR ? it.description : (it.pr_item_description || "Item")}
                   </td>
                   {isPR && <td className="py-2 px-3 text-sm font-mono text-slate-500">{it.budget_code || "—"}</td>}
-                  {isPR && <td className="py-2 px-3 text-sm text-slate-500">{it.sapropdi_name || "—"}</td>}
-                  {isPR && <td className="py-2 px-3 text-sm text-slate-500">{it.unit_name || "—"}</td>}
+                  <td className="py-2 px-3 text-sm text-slate-500">{it.sapropdi_name || "—"}</td>
+                  <td className="py-2 px-3 text-sm text-slate-500">{it.unit_name || "—"}</td>
                   <td className="py-2 px-3 text-sm font-mono text-slate-700 text-right">
                     {num(isPR ? it.quantity : it.order_qty)}
                   </td>
@@ -138,14 +166,14 @@ export function SourceDocumentPreview({
               {/* A PO's freight and handling are part of what is being paid for. */}
               {!isPR && (data?.extra_costs || []).map((e: any) => (
                 <tr key={`x${e.id}`} className="border-b border-slate-50 bg-amber-50/30">
-                  <td className="py-2 px-3 text-sm text-amber-700" colSpan={3}>+ {e.description}</td>
+                  <td className="py-2 px-3 text-sm text-amber-700" colSpan={colCount - 1}>+ {e.description}</td>
                   <td className="py-2 px-3 text-sm font-mono text-amber-700 text-right">{fmtRp(e.amount)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="bg-slate-50 border-t border-slate-200">
-                <td className={`py-2 px-3 text-sm font-semibold text-slate-700 text-right`} colSpan={isPR ? 6 : 3}>
+                <td className={`py-2 px-3 text-sm font-semibold text-slate-700 text-right`} colSpan={colCount - 1}>
                   {isPR ? "Grand Total PR" : "Grand Total PO"}
                 </td>
                 <td className="py-2 px-3 text-right text-sm font-mono font-bold text-emerald-700">{fmtRp(grandTotal)}</td>

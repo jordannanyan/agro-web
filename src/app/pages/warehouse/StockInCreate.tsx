@@ -1,19 +1,29 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, PackagePlus, Plus, Trash2, Save } from "lucide-react";
+import { ArrowLeft, PackagePlus, Plus, Trash2, Save, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 
 interface Warehouse { id: number; warehouse_name: string; }
 interface Sapropdi { id: number; sapropdi_name: string; }
 interface POOption { id: number; po_number: string; }
-interface Item { key: string; sapropdi_id: string; received_qty: string; item_condition: string; remarks: string; }
+interface Item {
+  key: string; sapropdi_id: string; received_qty: string; item_condition: string; remarks: string;
+  /** Set when the row came from a PO line, so the receipt links back to what was ordered. */
+  po_item_id: number | null;
+  /** How much that line ordered - shown beside the received qty, never sent. */
+  order_qty: number | null;
+  description: string | null;
+}
 
 const rid = () => Math.random().toString(36).slice(2);
-const newItem = (): Item => ({ key: rid(), sapropdi_id: "", received_qty: "", item_condition: "Good", remarks: "" });
+const newItem = (): Item => ({ key: rid(), sapropdi_id: "", received_qty: "", item_condition: "Good", remarks: "", po_item_id: null, order_qty: null, description: null });
+const isBlank = (it: Item) => !it.sapropdi_id && !it.received_qty && !it.remarks;
+const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
 export default function StockInCreate() {
   const navigate = useNavigate();
@@ -30,8 +40,43 @@ export default function StockInCreate() {
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<Item[]>([newItem()]);
   const [saving, setSaving] = useState(false);
+  const [poItems, setPoItems] = useState<any[]>([]);
 
   const upd = (key: string, f: keyof Item, v: string) => setItems((p) => p.map((it) => (it.key === key ? { ...it, [f]: v } : it)));
+
+  const rowsFromPO = (list: any[]): Item[] => list
+    .filter((it) => it.sapropdi_id != null)
+    .map((it) => ({
+      key: rid(),
+      sapropdi_id: String(it.sapropdi_id),
+      received_qty: String(it.order_qty ?? ""),
+      item_condition: "Good",
+      remarks: "",
+      po_item_id: it.id ?? null,
+      order_qty: it.order_qty != null ? Number(it.order_qty) : null,
+      description: it.pr_item_description ?? null,
+    }));
+
+  // Receiving against a PO means receiving the lines that PO ordered, so the rows
+  // are laid out from it: the saprodi, the quantity ordered, and the link back to
+  // the line. What actually arrived is still typed by hand - a short delivery is
+  // exactly what this document exists to record.
+  function fillFromPO(list: any[]) {
+    const rows = rowsFromPO(list);
+    if (!rows.length) { toast.error("PO ini tidak punya item ber-saprodi untuk disalin"); return; }
+    setItems(rows);
+    toast.success("Item diisi dari PO");
+  }
+
+  function handlePoLoaded({ items: loaded }: { items: any[] }) {
+    setPoItems(loaded);
+    // Only fill a form nobody has typed into yet; otherwise leave it to the button.
+    setItems((prev) => {
+      if (!prev.every(isBlank)) return prev;
+      const rows = rowsFromPO(loaded);
+      return rows.length ? rows : prev;
+    });
+  }
   const selectCls = "w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white";
 
   async function save() {
@@ -44,7 +89,7 @@ export default function StockInCreate() {
         purchase_order_id: poId ? Number(poId) : null,
         warehouse_id: Number(warehouseId), stock_in_date: date,
         delivery_note_no: deliveryNote || null, vehicle_number: vehicle || null, status, notes: notes || null,
-        items: valid.map((it) => ({ sapropdi_id: Number(it.sapropdi_id), received_qty: Number(it.received_qty), item_condition: it.item_condition, remarks: it.remarks || null })),
+        items: valid.map((it) => ({ po_item_id: it.po_item_id, sapropdi_id: Number(it.sapropdi_id), received_qty: Number(it.received_qty), item_condition: it.item_condition, remarks: it.remarks || null })),
       });
       toast.success("Stock In tercatat"); navigate("/warehouse/stock-in");
     } catch (e: any) { toast.error(e?.message || "Gagal menyimpan"); }
@@ -76,20 +121,43 @@ export default function StockInCreate() {
           </div>
         </div>
 
+        {/* What the PO actually ordered. Receiving used to be typed from the paper
+            delivery note with the order out of sight, so a wrong saprodi or a
+            quantity nobody ordered only surfaced later, in the stock card. */}
+        <SourceDocumentPreview docType="PO" docId={poId} onLoaded={handlePoLoaded} />
+
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Item Diterima</h2>
-            <Button size="sm" variant="outline" onClick={() => setItems((p) => [...p, newItem()])}><Plus className="w-4 h-4 mr-1" />Item</Button>
+            <div className="flex items-center gap-2">
+              {poId && poItems.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => fillFromPO(poItems)}>
+                  <Download className="w-4 h-4 mr-1" />Isi dari PO
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setItems((p) => [...p, newItem()])}><Plus className="w-4 h-4 mr-1" />Item</Button>
+            </div>
           </div>
           <table className="w-full">
             <thead><tr className="text-left text-xs text-slate-500 uppercase tracking-wide border-b border-slate-100">
-              <th className="py-2 pr-3 font-semibold">Saprodi</th><th className="py-2 px-3 font-semibold text-right">Qty Diterima</th><th className="py-2 px-3 font-semibold">Kondisi</th><th className="py-2 px-3 font-semibold">Keterangan</th><th />
+              <th className="py-2 pr-3 font-semibold">Saprodi</th><th className="py-2 px-3 font-semibold text-right">Qty PO</th><th className="py-2 px-3 font-semibold text-right">Qty Diterima</th><th className="py-2 px-3 font-semibold">Kondisi</th><th className="py-2 px-3 font-semibold">Keterangan</th><th />
             </tr></thead>
             <tbody>
               {items.map((it) => (
                 <tr key={it.key} className="border-b border-slate-50">
-                  <td className="py-2 pr-3"><select value={it.sapropdi_id} onChange={(e) => upd(it.key, "sapropdi_id", e.target.value)} className={selectCls}><option value="">—</option>{(sapropdi || []).map((s) => <option key={s.id} value={s.id}>{s.sapropdi_name}</option>)}</select></td>
-                  <td className="py-2 px-3 w-32"><Input type="number" className="text-right" value={it.received_qty} onChange={(e) => upd(it.key, "received_qty", e.target.value)} placeholder="0" /></td>
+                  <td className="py-2 pr-3">
+                    <select value={it.sapropdi_id} onChange={(e) => upd(it.key, "sapropdi_id", e.target.value)} className={selectCls}><option value="">—</option>{(sapropdi || []).map((s) => <option key={s.id} value={s.id}>{s.sapropdi_name}</option>)}</select>
+                    {it.description && <p className="text-[11px] text-slate-400 mt-1">{it.description}</p>}
+                  </td>
+                  {/* Ordered against received, side by side: a shortage should show
+                      while it is being typed, not at reconciliation. */}
+                  <td className="py-2 px-3 w-24 text-right text-sm font-mono text-slate-400">{it.order_qty != null ? num(it.order_qty) : "—"}</td>
+                  <td className="py-2 px-3 w-32">
+                    <Input type="number" className="text-right" value={it.received_qty} onChange={(e) => upd(it.key, "received_qty", e.target.value)} placeholder="0" />
+                    {it.order_qty != null && Number(it.received_qty) > 0 && Number(it.received_qty) !== it.order_qty && (
+                      <p className="text-[11px] text-amber-600 mt-1">Selisih {num(Number(it.received_qty) - it.order_qty)}</p>
+                    )}
+                  </td>
                   <td className="py-2 px-3 w-32"><select value={it.item_condition} onChange={(e) => upd(it.key, "item_condition", e.target.value)} className={selectCls}><option>Good</option><option>Damaged</option><option>Shortage</option></select></td>
                   <td className="py-2 px-3"><Input value={it.remarks} onChange={(e) => upd(it.key, "remarks", e.target.value)} placeholder="Opsional" /></td>
                   <td className="py-2 pl-3">{items.length > 1 && <button onClick={() => setItems((p) => p.filter((x) => x.key !== it.key))} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}</td>

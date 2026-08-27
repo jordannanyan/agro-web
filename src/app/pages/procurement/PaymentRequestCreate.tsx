@@ -26,6 +26,11 @@ export default function PaymentRequestCreate() {
   const [prId, setPrId] = useState("");
   const [poId, setPoId] = useState("");
   const [budgetCodeId, setBudgetCodeId] = useState("");
+  // The code the source document already carries. A payment does not classify the
+  // spend a second time - the PO (or the PR it came straight from) settled that -
+  // so the field only asks when the source has nothing to follow.
+  const [srcBudget, setSrcBudget] = useState<{ id: number | null; code: string | null }>({ id: null, code: null });
+  const [overrideBudget, setOverrideBudget] = useState(false);
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [pic, setPic] = useState("");
@@ -75,8 +80,15 @@ export default function PaymentRequestCreate() {
   // all (it is computed per order), which is why the amount used to stay 0 for
   // Route B and had to be keyed in by hand.
   const [sourceTotal, setSourceTotal] = useState<number | null>(null);
-  function handleSourceLoaded({ grandTotal }: { grandTotal: number }) {
+  function handleSourceLoaded(
+    { grandTotal, budgetCodeId: srcCodeId, budgetCode: srcCode }:
+    { grandTotal: number; budgetCodeId: number | null; budgetCode: string | null },
+  ) {
     setSourceTotal(grandTotal);
+    setSrcBudget({ id: srcCodeId, code: srcCode });
+    // Only fills an empty field, so editing an old payment keeps the code it was
+    // approved with even if the order has been re-coded since.
+    if (srcCodeId != null) setBudgetCodeId((prev) => prev || String(srcCodeId));
     if (skipAutofill.current) { skipAutofill.current = false; return; }
     if (grandTotal > 0 && !(Number(amount) > 0)) setAmount(String(grandTotal));
   }
@@ -86,6 +98,8 @@ export default function PaymentRequestCreate() {
   useEffect(() => {
     if (skipAutofill.current) return;
     setSourceTotal(null);
+    setSrcBudget({ id: null, code: null });
+    setOverrideBudget(false);
     if (sourceTotal != null && Number(amount) === sourceTotal) setAmount("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prId, poId, sourceType]);
@@ -94,7 +108,9 @@ export default function PaymentRequestCreate() {
   async function submit(status: "Draft" | "Pending" | "keep") {
     if (sourceType === "PR" && !prId) { toast.error("Pilih PR sumber"); return; }
     if (sourceType === "PO" && !poId) { toast.error("Pilih PO sumber"); return; }
-    if (!budgetCodeId) { toast.error("Project Code wajib diisi"); return; }
+    // The server inherits from the source when nothing is sent, so this only
+    // catches the case where neither has a code.
+    if (!budgetCodeId && srcBudget.id == null) { toast.error("Project Code wajib diisi - dokumen sumber belum punya budget code"); return; }
     if (!(Number(amount) > 0)) { toast.error("Nominal harus > 0"); return; }
     const payload: any = {
       purchase_request_id: sourceType === "PR" ? Number(prId) : null,
@@ -176,8 +192,26 @@ export default function PaymentRequestCreate() {
           <div className="grid grid-cols-2 gap-4">
             {/* No entity field: a PayReq always follows a PR or PO, which settles it,
                 and the source dropdown above already prints that entity. */}
-            <div><label className={label}>Project Code <span className="text-red-500">*</span></label>
-              <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">— pilih —</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select>
+            <div>
+              <label className={label}>Project Code {srcBudget.id == null && <span className="text-red-500">*</span>}</label>
+              {srcBudget.id != null && !overrideBudget ? (
+                <>
+                  <div className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm bg-slate-50 font-mono text-slate-700">
+                    {(budgetCodes || []).find((b) => String(b.id) === budgetCodeId)?.code || srcBudget.code || "—"}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Mengikuti {sourceType === "PO" ? "PO" : "PR"} sumber.{" "}
+                    <button type="button" onClick={() => setOverrideBudget(true)} className="text-emerald-600 hover:underline">Ubah</button>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">— pilih —</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select>
+                  {srcBudget.id != null && (
+                    <p className="text-[11px] text-amber-600 mt-1">Berbeda dari kode dokumen sumber ({srcBudget.code}).</p>
+                  )}
+                </>
+              )}
             </div>
             <div>
               <label className={label}>Nominal (Rp) <span className="text-red-500">*</span></label>

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import {
   DollarSign, TrendingUp, Users, Sprout, ShoppingCart, Factory,
-  AlertTriangle, ArrowRight, FileText, CreditCard, Building2,
+  AlertTriangle, ArrowRight, FileText, CreditCard, Building2, Wallet,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -20,9 +20,13 @@ interface DashboardData {
     purchasing_qty: number; purchasing_value: number;
     selling_revenue: number; open_processing: number;
     pending_pr: number; pending_po: number; outstanding_total: number;
+    /** Payment requests that reached 'Paid' — money that has left the account. */
+    expenses_paid: number; expenses_paid_count: number;
   };
   purchasing_by_scheme: { scheme: string; count: number; qty: number; value: number }[];
-  trend: { period: string; purchasing_value: number; selling_revenue: number }[];
+  expenses_by_kind: { kind: string; count: number; value: number }[];
+  expenses_by_code: { code: string; count: number; value: number }[];
+  trend: { period: string; purchasing_value: number; selling_revenue: number; expenses_paid: number }[];
 }
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
@@ -48,15 +52,22 @@ export default function ExecutiveDashboard() {
 
   const trend = useMemo(
     () => (data?.trend || []).map((t) => ({
-      period: t.period, Pembelian: Number(t.purchasing_value || 0), Penjualan: Number(t.selling_revenue || 0),
+      period: t.period,
+      Pembelian: Number(t.purchasing_value || 0),
+      Penjualan: Number(t.selling_revenue || 0),
+      Pengeluaran: Number(t.expenses_paid || 0),
     })),
     [data]
   );
   const schemeMax = Math.max(1, ...(data?.purchasing_by_scheme || []).map((s) => Number(s.value)));
+  const expenseMax = Math.max(1, ...(data?.expenses_by_code || []).map((e) => Number(e.value)));
 
   const kpiCards = [
     { label: "Nilai Pembelian", value: fmtRp(k?.purchasing_value ?? 0), icon: ShoppingCart, color: "text-blue-700", bg: "bg-blue-50" },
     { label: "Revenue Penjualan", value: fmtRp(k?.selling_revenue ?? 0), icon: TrendingUp, color: "text-emerald-700", bg: "bg-emerald-50" },
+    // Spend, not commitment: a payment request only turns 'Paid' when the bank
+    // statement says the transfer happened.
+    { label: "Expenses (Terbayar)", value: fmtRp(k?.expenses_paid ?? 0), icon: Wallet, color: "text-rose-700", bg: "bg-rose-50" },
     { label: "Outstanding Petani", value: fmtRp(k?.outstanding_total ?? 0), icon: DollarSign, color: "text-amber-700", bg: "bg-amber-50" },
     { label: "Volume Beli (Kg)", value: Number(k?.purchasing_qty ?? 0).toLocaleString("id-ID"), icon: Sprout, color: "text-violet-700", bg: "bg-violet-50" },
   ];
@@ -90,7 +101,7 @@ export default function ExecutiveDashboard() {
       {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         {kpiCards.map((c) => (
           <Card key={c.label} className="p-5">
             <div className="flex items-center justify-between mb-3">
@@ -109,7 +120,7 @@ export default function ExecutiveDashboard() {
         <Card className="lg:col-span-2 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-slate-900 font-semibold">Tren Pembelian vs Penjualan</h2>
+              <h2 className="text-slate-900 font-semibold">Tren Pembelian, Penjualan & Pengeluaran</h2>
               <p className="text-xs text-slate-400">6 periode terakhir</p>
             </div>
           </div>
@@ -122,6 +133,7 @@ export default function ExecutiveDashboard() {
                   <defs>
                     <linearGradient id="gPur" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} /></linearGradient>
                     <linearGradient id="gSel" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
+                    <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} /><stop offset="95%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="period" tick={{ fontSize: 12, fill: "#94a3b8" }} />
@@ -130,6 +142,8 @@ export default function ExecutiveDashboard() {
                   <Legend />
                   <Area type="monotone" dataKey="Pembelian" stroke="#3b82f6" fill="url(#gPur)" strokeWidth={2} />
                   <Area type="monotone" dataKey="Penjualan" stroke="#10b981" fill="url(#gSel)" strokeWidth={2} />
+                  {/* Booked on the date the money left the account (released_pay_date). */}
+                  <Area type="monotone" dataKey="Pengeluaran" stroke="#f43f5e" fill="url(#gExp)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -162,6 +176,67 @@ export default function ExecutiveDashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Expenses — where the paid money went. Kept apart from the KPI card so the
+          total is never read without what it is made of. */}
+      <Card className="p-5">
+        <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h2 className="text-slate-900 font-semibold">Expenses — Payment Request Terbayar</h2>
+            <p className="text-xs text-slate-400">
+              Hanya PayReq berstatus <span className="font-semibold">Paid</span> — dicocokkan dari rekening koran, bukan yang baru disetujui
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xl font-bold font-mono text-rose-700">{fmtRp(k?.expenses_paid ?? 0)}</p>
+            <p className="text-xs text-slate-400">{k?.expenses_paid_count ?? 0} payment request</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-2">Per Jenis</p>
+            <div className="space-y-2">
+              {(data?.expenses_by_kind || []).map((e) => (
+                <div key={e.kind} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50">
+                  <span className="text-sm text-slate-700">
+                    {e.kind === "Reimbursement" ? "Reimbursement petani" : "Procurement"}
+                    <span className="text-xs text-slate-400"> · {e.count} dok</span>
+                  </span>
+                  <span className="text-sm font-mono font-semibold text-slate-800">{fmtRp(e.value)}</span>
+                </div>
+              ))}
+              {(!data?.expenses_by_kind || data.expenses_by_kind.length === 0) && (
+                <p className="text-sm text-slate-400 py-4 text-center">{loading ? "Memuat…" : "Belum ada pembayaran terbayar"}</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-2">Per Project Code</p>
+            <div className="space-y-3">
+              {(data?.expenses_by_code || []).map((e) => (
+                <div key={e.code}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm font-mono text-slate-600">{e.code}</span>
+                    <span className="text-sm font-mono text-slate-600">{fmtRp(e.value)}</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-rose-400" style={{ width: `${(Number(e.value) / expenseMax) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+              {(!data?.expenses_by_code || data.expenses_by_code.length === 0) && (
+                <p className="text-sm text-slate-400 py-4 text-center">{loading ? "Memuat…" : "Belum ada pembayaran terbayar"}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <Link to="/procurement/payment-request" className="inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:underline mt-4">
+          Lihat semua payment request <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      </Card>
 
       {/* Secondary stats + actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
