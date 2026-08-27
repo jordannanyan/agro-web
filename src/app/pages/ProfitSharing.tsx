@@ -202,6 +202,13 @@ function ShareTab() {
   const totalKth = lines.reduce((s, l) => s + Number(l.value_kth || 0), 0);
   const totalCompany = lines.reduce((s, l) => s + Number(l.value_company || 0), 0);
   const totalPayable = lines.reduce((s, l) => s + Number(l.payable_farmer || 0), 0);
+  // The KTH's rate is a cut of the company's portion, so the box names both it
+  // and what it works out to against the margin (7% of 70% = 4,9%).
+  const kthLabel = !preview?.pct_kth
+    ? "KTH"
+    : preview.pct_kth_effective != null
+      ? `KTH (${pct(preview.pct_kth)} dari bagian perusahaan = ${pct(preview.pct_kth_effective)} dari laba)`
+      : `KTH (${pct(preview.pct_kth)} dari bagian perusahaan)`;
 
   return (
     <div className="space-y-6">
@@ -295,7 +302,7 @@ function ShareTab() {
                   <span className="font-mono font-bold">{fmtRp(totalFarmer)}</span>
                 </div>
                 <div className="px-4 py-2 rounded-lg bg-slate-100">
-                  <span className="text-xs text-slate-500 block">KTH{preview.pct_kth ? ` (${pct(preview.pct_kth)} dari perusahaan)` : ""}</span>
+                  <span className="text-xs text-slate-500 block">{kthLabel}</span>
                   <span className={`font-mono font-bold ${totalKth >= 0 ? "text-slate-800" : "text-red-600"}`}>{fmtRp(totalKth)}</span>
                 </div>
                 <div className="px-4 py-2 rounded-lg bg-slate-100">
