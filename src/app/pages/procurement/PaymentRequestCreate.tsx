@@ -11,6 +11,7 @@ import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 interface BudgetCode { id: number; code: string; }
 interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; grand_total: number; }
 interface POOption { id: number; po_number: string; entity_id: number; entity_name?: string | null; }
+interface BankOption { id: number; bank_code: string; bank_name: string; is_self: number }
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -21,6 +22,9 @@ export default function PaymentRequestCreate() {
   const { data: budgetCodes } = useApi<BudgetCode[]>("budget-codes");
   const { data: prs } = useApi<PROption[]>("purchase-requests", { status: "Approved" });
   const { data: pos } = useApi<POOption[]>("purchase-orders");
+  // The bank has to be picked rather than typed: an export file carries the bank
+  // *code*, and "BCA" / "bca" / "Bank BCA" are not one.
+  const { data: banks } = useApi<BankOption[]>("banks", { is_active: 1 });
 
   const [sourceType, setSourceType] = useState<"PO" | "PR">("PO");
   const [prId, setPrId] = useState("");
@@ -36,6 +40,10 @@ export default function PaymentRequestCreate() {
   const [pic, setPic] = useState("");
   const [activityDate, setActivityDate] = useState("");
   const [estPayDate, setEstPayDate] = useState("");
+  const [bankId, setBankId] = useState("");
+  // Kept alongside bank_id because it is what every existing screen prints, and
+  // because a document should still read correctly if a bank is later removed
+  // from the list.
   const [bankName, setBankName] = useState("");
   const [bankAccount, setBankAccount] = useState("");
   const [beneficiary, setBeneficiary] = useState("");
@@ -64,6 +72,7 @@ export default function PaymentRequestCreate() {
         setPic(p.person_in_charge ?? "");
         setActivityDate(p.activity_date ? String(p.activity_date).slice(0, 10) : "");
         setEstPayDate(p.estimated_pay_date ? String(p.estimated_pay_date).slice(0, 10) : "");
+        setBankId(p.bank_id ? String(p.bank_id) : "");
         setBankName(p.bank_name ?? "");
         setBankAccount(p.bank_account ?? "");
         setBeneficiary(p.beneficiary_name ?? "");
@@ -120,6 +129,7 @@ export default function PaymentRequestCreate() {
       reason, person_in_charge: pic,
       activity_date: activityDate || null,
       estimated_pay_date: estPayDate || null,
+      bank_id: bankId ? Number(bankId) : null,
       bank_name: bankName, bank_account: bankAccount, beneficiary_name: beneficiary,
       ...(status === "keep" ? {} : { status }),
     };
@@ -244,7 +254,30 @@ export default function PaymentRequestCreate() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Rekening Tujuan</h2>
           <div className="grid grid-cols-3 gap-4">
-            <div><label className={label}>Bank</label><Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="BCA / Mandiri" /></div>
+            <div>
+              <label className={label}>Bank</label>
+              <select
+                className={selectCls}
+                value={bankId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setBankId(id);
+                  // The label follows the choice, so the two can never disagree.
+                  const b = (banks || []).find((x) => String(x.id) === id);
+                  setBankName(b ? b.bank_name : "");
+                }}
+              >
+                <option value="">— pilih bank —</option>
+                {(banks || []).map((b) => (
+                  <option key={b.id} value={b.id}>{b.bank_name}</option>
+                ))}
+              </select>
+              {!bankId && bankName && (
+                <p className="text-[11px] text-amber-600 mt-1">
+                  Tersimpan sebagai teks “{bankName}” — pilih dari daftar agar bisa masuk file transfer Kopra.
+                </p>
+              )}
+            </div>
             <div><label className={label}>No. Rekening</label><Input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="123456789" /></div>
             <div><label className={label}>Atas Nama</label><Input value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} placeholder="Nama penerima" /></div>
           </div>

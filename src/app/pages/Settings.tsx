@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Settings as SettingsIcon, User, Lock, Building2, Users, Package, DollarSign, Tag,
-  GitBranch, CreditCard, Sprout, Warehouse, Truck, MapPin, Boxes, Factory,
+  GitBranch, CreditCard, Sprout, Warehouse, Truck, MapPin, Boxes, Factory, Landmark,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../components/ui/card";
@@ -69,6 +69,7 @@ export default function Settings() {
   const { data: warehouses } = useApi<any[]>("warehouses");
   const { data: sapropdi } = useApi<any[]>("sapropdi");
   const { data: units } = useApi<any[]>("units");
+  const { data: banks } = useApi<any[]>("banks");
 
   const entityOpts = opt(entities, "id", "entities_name");
   const roleOpts = opt(roles, "id", "role_name");
@@ -76,6 +77,7 @@ export default function Settings() {
   const whOpts = opt(warehouses, "id", "warehouse_name");
   const sapropdiOpts = opt(sapropdi, "id", "sapropdi_name");
   const unitOpts = opt(units, "id", "unit_name");
+  const bankOpts = opt(banks, "id", "bank_name");
 
   // ── Field configs ──
   const vendorFields: FieldDef[] = [
@@ -84,8 +86,20 @@ export default function Settings() {
     { name: "phone", label: "Telepon" },
     { name: "email", label: "Email", hideInTable: true },
     { name: "address", label: "Alamat", type: "textarea", hideInTable: true },
+    { name: "bank_id", label: "Bank", type: "select", options: bankOpts, hideInTable: true },
+    { name: "bank_account", label: "No. Rekening", hideInTable: true },
+    { name: "beneficiary_name", label: "Atas Nama", hideInTable: true },
     { name: "category", label: "Kategori" },
     { name: "status", label: "Status" },
+  ];
+  // The bank list Kopra transfers are addressed with. Editable because Mandiri
+  // refreshes the published list from time to time — not so that a code can be
+  // invented: `bank_code` is a BIC and a wrong one is only discovered by the bank.
+  const bankFields: FieldDef[] = [
+    { name: "bank_name", label: "Nama Bank", required: true },
+    { name: "bank_code", label: "Kode (BIC)", required: true, placeholder: "mis. CENAIDJA" },
+    { name: "is_self", label: "Bank Mandiri (transfer sesama)", type: "switch" },
+    { name: "is_active", label: "Aktif", type: "switch" },
   ];
   const budgetFields: FieldDef[] = [
     { name: "code", label: "Kode", required: true },
@@ -147,6 +161,9 @@ export default function Settings() {
   const kthFields: FieldDef[] = [
     { name: "kth_name", label: "Nama KTH", required: true },
     { name: "entities_id", label: "Entitas", type: "select", options: entityOpts, required: true },
+    { name: "bank_id", label: "Bank", type: "select", options: bankOpts },
+    { name: "bank_account", label: "No. Rekening" },
+    { name: "bank_account_name", label: "Atas Nama", hideInTable: true },
     { name: "username", label: "Username", hideInTable: true },
     { name: "password", label: "Password", type: "password", hideInTable: true },
   ];
@@ -167,6 +184,16 @@ export default function Settings() {
       cell: (r) => (r.profit_share_farmer_pct != null ? `${Number(r.profit_share_farmer_pct).toFixed(2)}%` : "—") },
     { name: "profit_share_kth_pct", label: "% KTH (dari bagian perusahaan)", type: "number",
       cell: (r) => (r.profit_share_kth_pct != null ? `${Number(r.profit_share_kth_pct).toFixed(2)}%` : "—") },
+  ];
+  // The PTs' own Mandiri accounts. `is_default` is not editable here — it is set
+  // from the row action, which is the only thing that can clear the previous
+  // default at the same time.
+  const companyAccountFields: FieldDef[] = [
+    { name: "entity_id", label: "Perusahaan", type: "select", options: entityOpts, required: true },
+    { name: "label", label: "Nama Rekening", required: true, placeholder: "OPERATIONAL / TRADING CACAO" },
+    { name: "account_no", label: "No. Rekening", required: true },
+    { name: "account_name", label: "Atas Nama", hideInTable: true },
+    { name: "is_active", label: "Aktif", type: "switch" },
   ];
   const collectorFields: FieldDef[] = [
     { name: "collector_name", label: "Collector", required: true },
@@ -200,6 +227,8 @@ export default function Settings() {
           {tab("saprodi", Sprout, "Saprodi")}
           {tab("units", Tag, "Satuan")}
           {tab("payment-methods", CreditCard, "Metode Bayar")}
+          {tab("banks", Landmark, "Bank")}
+          {tab("company-accounts", Landmark, "Rekening Perusahaan")}
           {tab("prefinance-types", Building2, "Tipe Pre-Finance")}
           {tab("users", Users, "Users & Roles")}
           {tab("approval", GitBranch, "Approval Routes")}
@@ -219,6 +248,31 @@ export default function Settings() {
         <TabsContent value="saprodi"><Card className="p-6"><MasterCrud endpoint="sapropdi" title="Master Barang Saprodi" fields={sapropdiFields} /></Card></TabsContent>
         <TabsContent value="units"><Card className="p-6"><MasterCrud endpoint="units" title="Master Satuan" fields={unitFields} /></Card></TabsContent>
         <TabsContent value="payment-methods"><Card className="p-6"><MasterCrud endpoint="payment-methods" title="Master Metode Pembayaran" fields={paymentFields} /></Card></TabsContent>
+        <TabsContent value="banks">
+          <Card className="p-6">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-5">
+              <p className="text-xs text-slate-600">
+                Daftar bank tujuan transfer beserta <strong>kode BIC</strong> yang diminta Kopra by Mandiri
+                (mis. <span className="font-mono">CENAIDJA</span> untuk BCA). Diisi otomatis dari daftar resmi
+                Mandiri — ubah hanya kalau Mandiri memperbarui daftarnya. Baris <strong>Bank Mandiri</strong>
+                ditandai khusus karena transfer ke sana dikirim sebagai <em>In-House</em> dan tidak memakai kode bank.
+              </p>
+            </div>
+            <MasterCrud endpoint="banks" title="Master Bank" fields={bankFields} />
+          </Card>
+        </TabsContent>
+        <TabsContent value="company-accounts">
+          <Card className="p-6">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 mb-5">
+              <p className="text-xs text-emerald-800">
+                Rekening Mandiri milik PT — sisi yang <strong>didebit</strong> saat file transfer Kopra dibuat.
+                Nomornya masuk ke baris header file, jadi tanpa ini export tidak bisa dijalankan. Satu PT boleh
+                punya beberapa (operasional, trading per komoditas); yang dipakai dipilih saat export.
+              </p>
+            </div>
+            <MasterCrud endpoint="company-bank-accounts" title="Rekening Perusahaan" fields={companyAccountFields} />
+          </Card>
+        </TabsContent>
         <TabsContent value="prefinance-types"><Card className="p-6"><MasterCrud endpoint="pre-finance-types" title="Master Tipe Pre-Finance" fields={preFinanceFields} /></Card></TabsContent>
         <TabsContent value="users"><Card className="p-6"><MasterCrud endpoint="users" title="Users & Roles" fields={userFields} /></Card></TabsContent>
         <TabsContent value="approval">

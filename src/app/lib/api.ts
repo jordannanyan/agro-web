@@ -102,6 +102,36 @@ export const api = {
     const json = await handle(await fetch(buildUrl(path), { method, headers: authHeaders(), body: form }));
     return (json && json.data !== undefined ? json.data : json) as T;
   },
+  /**
+   * GET a file and hand it to the browser to save.
+   *
+   * A plain <a href> cannot be used: these endpoints are behind the Bearer token,
+   * which a link does not carry. So the response is fetched like any other, and the
+   * blob is saved through a temporary object URL.
+   *
+   * Errors still arrive as JSON — an export refused because a row is missing its
+   * bank details is a 422 with the list — so failures go through `handle` and come
+   * back as an ApiError with the body intact, exactly like every other call.
+   */
+  async download(path: string, query?: Query): Promise<{ filename: string; headers: Headers }> {
+    const res = await fetch(buildUrl(path, query), { headers: authHeaders() });
+    if (!res.ok) await handle(res); // throws ApiError carrying the server's message
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/.exec(disposition);
+    const filename = match ? match[1] : path.split("/").pop() || "download";
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoked on the next tick: revoking synchronously can beat the download in
+    // Safari and leave the user with an empty file.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { filename, headers: res.headers };
+  },
 };
 
 export function fileUrl(p?: string | null): string | undefined {

@@ -10,11 +10,12 @@
 // people to trust a parser they cannot inspect is how reconciliation stops being
 // checked at all.
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   FileSpreadsheet, Upload, CheckCircle2, AlertTriangle, HelpCircle, Copy, Check,
   Clock, History, ArrowRight, X, Banknote, Lock, Eye, EyeOff, ShieldCheck, ShieldAlert,
+  Download, Landmark, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../../components/ui/card";
@@ -262,6 +263,38 @@ function Stat({ label, value, tone = "slate", sub }: { label: string; value: num
   );
 }
 
+// ── Export ke Kopra ───────────────────────────────────────────────────────────
+// The mirror image of the upload above. Instead of reading what the bank did, this
+// writes what finance is asking it to do — and puts the payment code in the transfer
+// remark, which is the whole reason the statement coming back can settle itself.
+
+interface EntityRow { id: number; entities_name: string; bank_account_no?: string | null }
+
+interface ExportLine {
+  id: number; payreq_number: string; payment_code: string | null; payreq_kind: string;
+  beneficiary_name: string | null; bank_account: string | null; bank_name: string | null;
+  bank_code: string; method: string; service: string; amount: number;
+}
+interface ExportBlocker { id: number; payreq_number: string; reason: string }
+interface DebitAccount {
+  id: number; label: string; account_no: string; account_name: string | null;
+}
+interface ExportPreview {
+  format: string; filename: string; transfer_date: string;
+  debit_account: DebitAccount & { entity_id: number; entity_name: string };
+  debit_accounts: DebitAccount[];
+  bi_fast_limit: number; total: number; count: number;
+  lines: ExportLine[];
+  blockers: ExportBlocker[];
+  already_exported: { id: number; payreq_number: string; exported_at: string }[];
+}
+
+const METHOD_HINT: Record<string, string> = {
+  "In-House": "Sesama Mandiri",
+  "BI FAST": "BI FAST",
+  RTGS: "RTGS",
+};
+
 export default function PaymentReconciliation() {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -269,13 +302,94 @@ export default function PaymentReconciliation() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [applied, setApplied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"upload" | "outstanding" | "history">("upload");
+  const [tab, setTab] = useState<"export" | "upload" | "outstanding" | "history">("export");
   // Only for the encrypted exports the bank e-mails out. It is sent with the file
   // and never stored — not here, not on the server — so it has to be re-typed if
   // the same file is uploaded again.
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+
+  // ── Export state ───────────────────────────────────────────────────────────
+  // A Consolidated file debits one account, so the entity is not a filter here but
+  // part of what the file *is*: pick SNBS and you are making SNBS's transfer run.
+  const { data: entities } = useApi<EntityRow[]>("entities");
+  const [expEntity, setExpEntity] = useState<number | null>(null);
+  // A PT runs several accounts — operational plus one per trading line — and which
+  // one a transfer leaves from is not a detail. Blank means "the entity's default",
+  // which the server resolves.
+  const [expAccount, setExpAccount] = useState<number | null>(null);
+  const [expFormat, setExpFormat] = useState<"csv" | "xlsx">("csv");
+  const [expDate, setExpDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [expReexport, setExpReexport] = useState(false);
+  const [expPreview, setExpPreview] = useState<ExportPreview | null>(null);
+  const [expError, setExpError] = useState<string | null>(null);
+  const [expBusy, setExpBusy] = useState(false);
+  const [excluded, setExcluded] = useState<Set<number>>(new Set());
+
+  // Default to the first entity the signed-in user can actually export for.
+  useEffect(() => {
+    if (expEntity == null && entities?.length) setExpEntity(entities[0].id);
+  }, [entities, expEntity]);
+
+  const expQuery = useMemo(() => ({
+    entity_id: expEntity ?? "",
+    debit_account_id: expAccount ?? "",
+    format: expFormat,
+    transfer_date: expDate,
+    reexport: expReexport ? 1 : "",
+  }), [expEntity, expAccount, expFormat, expDate, expReexport]);
+
+  async function loadPreview() {
+    if (!expEntity) return;
+    setExpBusy(true);
+    setExpError(null);
+    try {
+      const data = await api.get<ExportPreview>("payment-requests/export/kopra/preview", expQuery);
+      setExpPreview(data);
+      // Follow the server's choice so the dropdown shows the account actually used,
+      // rather than sitting blank while the file debits something.
+      setExpAccount(data.debit_account.id);
+      setExcluded(new Set());
+    } catch (e: any) {
+      setExpPreview(null);
+      setExpError(e?.message || "Gagal menyiapkan export");
+    } finally { setExpBusy(false); }
+  }
+
+  // The preview is the file: every control above it changes what would be
+  // downloaded, so none of them may leave a stale list on screen.
+  useEffect(() => {
+    if (tab === "export" && expEntity) loadPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, expEntity, expAccount, expFormat, expDate, expReexport]);
+
+  const included = useMemo(
+    () => (expPreview?.lines || []).filter((l) => !excluded.has(l.id)), [expPreview, excluded]);
+  const includedTotal = useMemo(
+    () => included.reduce((sum, l) => sum + Number(l.amount || 0), 0), [included]);
+
+  async function downloadKopra() {
+    if (!expEntity || !included.length) return;
+    setExpBusy(true);
+    try {
+      // The ids are always sent, even when nothing is excluded: the server re-plans
+      // from them, so what is downloaded is exactly the set shown on screen.
+      const { filename } = await api.download("payment-requests/export/kopra", {
+        ...expQuery, ids: included.map((l) => l.id).join(","),
+      });
+      toast.success(`${included.length} transfer diexport — ${filename}`);
+      // Re-read: the rows just downloaded are now stamped as exported, and the
+      // outstanding list is what finance chases next.
+      loadPreview();
+      refetchOutstanding();
+    } catch (e: any) {
+      const blockers: ExportBlocker[] = e?.body?.data?.blockers || [];
+      toast.error(blockers.length
+        ? `${e.message} (${blockers.map((b) => b.payreq_number).join(", ")})`
+        : e?.message || "Gagal membuat file");
+    } finally { setExpBusy(false); }
+  }
 
   const { data: outstanding, refetch: refetchOutstanding } =
     useApi<Outstanding[]>("bank-statements/outstanding");
@@ -354,6 +468,7 @@ export default function PaymentReconciliation() {
       </div>
 
       <div className="flex items-center gap-1">
+        <button className={tabCls("export")} onClick={() => setTab("export")}>Export Transfer Kopra</button>
         <button className={tabCls("upload")} onClick={() => setTab("upload")}>Unggah & Cocokkan</button>
         <button className={tabCls("outstanding")} onClick={() => setTab("outstanding")}>
           Belum Terbayar{outstanding?.length ? ` (${outstanding.length})` : ""}
@@ -362,6 +477,258 @@ export default function PaymentReconciliation() {
       </div>
 
       {/* ── Unggah ──────────────────────────────────────────────────────────── */}
+      {/* ── Export ke Kopra ─────────────────────────────────────────────────── */}
+      {tab === "export" && (
+        <>
+          <Card className="p-6">
+            <div className="flex items-start gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                <Landmark className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-slate-800 font-semibold">File transfer massal untuk Kopra by Mandiri</h3>
+                <p className="text-xs text-slate-500 max-w-3xl">
+                  Payment request yang sudah disetujui dikumpulkan menjadi satu file yang tinggal diunggah di Kopra.
+                  Kode pembayaran ikut masuk ke kolom keterangan transfer, jadi mutasi yang kembali nanti bisa
+                  melunasinya sendiri di tab <span className="font-semibold">Unggah &amp; Cocokkan</span>.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Perusahaan</label>
+                <select
+                  value={expEntity ?? ""}
+                  onChange={(e) => {
+                    setExpEntity(Number(e.target.value) || null);
+                    // The old account belongs to the old company. Clearing it lets the
+                    // server pick the new company's default instead of refusing.
+                    setExpAccount(null);
+                  }}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+                >
+                  {(entities || []).map((e) => (
+                    <option key={e.id} value={e.id}>{e.entities_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Rekening didebit</label>
+                <select
+                  value={expAccount ?? ""}
+                  onChange={(e) => setExpAccount(Number(e.target.value) || null)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  disabled={!expPreview?.debit_accounts?.length}
+                >
+                  {(expPreview?.debit_accounts || []).map((a) => (
+                    <option key={a.id} value={a.id}>{a.label} — {a.account_no}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Format</label>
+                <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1">
+                  {(["csv", "xlsx"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setExpFormat(f)}
+                      className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                        expFormat === f ? "bg-white shadow-sm text-slate-800" : "text-slate-500 hover:text-slate-700"}`}
+                    >
+                      {f.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {expFormat === "csv"
+                    ? "Multiple Transfer by File Upload — Consolidated"
+                    : "Template KOPRA format baru (mendukung RTGS)"}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Tanggal transfer</label>
+                <input
+                  type="date"
+                  value={expDate}
+                  onChange={(e) => setExpDate(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+                />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-xs text-slate-600 pb-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={expReexport}
+                    onChange={(e) => setExpReexport(e.target.checked)}
+                    className="rounded border-slate-300"
+                  />
+                  Ikutkan yang sudah pernah diexport
+                </label>
+              </div>
+            </div>
+
+            {expPreview && (
+              <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl bg-slate-50 border border-slate-100 px-4 py-3">
+                <div>
+                  <p className="text-[11px] text-slate-400">Rekening didebit</p>
+                  <p className="text-sm font-mono font-semibold text-slate-800">{expPreview.debit_account.account_no}</p>
+                  <p className="text-[11px] text-slate-500">{expPreview.debit_account.label}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-slate-400">Nama file</p>
+                  <p className="text-sm font-mono text-slate-700">{expPreview.filename}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-slate-400">Jumlah transfer</p>
+                  <p className="text-sm font-semibold text-slate-800">{included.length}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-slate-400">Total</p>
+                  <p className="text-sm font-mono font-bold text-slate-900">{fmtRp(includedTotal)}</p>
+                </div>
+                <div className="ml-auto">
+                  <Button
+                    onClick={downloadKopra}
+                    disabled={expBusy || !included.length}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    {expBusy
+                      ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      : <Download className="w-4 h-4 mr-2" />}
+                    Unduh file {expFormat.toUpperCase()}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {expError && (
+              <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <p className="text-sm text-amber-800">{expError}</p>
+              </div>
+            )}
+          </Card>
+
+          {/* Ditahan: setiap baris di sini adalah orang yang tidak akan menerima
+              transfer kalau tidak diperbaiki dulu. */}
+          {!!expPreview?.blockers.length && (
+            <Card className="p-0 border-amber-200">
+              <div className="p-4 border-b border-amber-100 bg-amber-50/60 rounded-t-xl flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-semibold text-amber-900">
+                  {expPreview.blockers.length} payment request belum bisa masuk file
+                </h3>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {expPreview.blockers.map((b) => (
+                  <div key={b.id} className="px-4 py-3 flex items-start gap-3">
+                    <button
+                      onClick={() => navigate(`/procurement/payreq/${b.id}`)}
+                      className="font-mono text-sm text-emerald-700 hover:underline shrink-0"
+                    >
+                      {b.payreq_number}
+                    </button>
+                    <p className="text-sm text-slate-600">{b.reason}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {!!expPreview?.already_exported.length && (
+            <Card className="p-4 flex items-start gap-2">
+              <History className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+              <p className="text-sm text-slate-600">
+                {expPreview.already_exported.length} payment request sudah pernah masuk file transfer sebelumnya dan
+                dilewati: <span className="font-mono">{expPreview.already_exported.map((r) => r.payreq_number).join(", ")}</span>.
+                Centang “Ikutkan yang sudah pernah diexport” kalau memang perlu diulang.
+              </p>
+            </Card>
+          )}
+
+          <Card className="p-0">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-slate-800 font-semibold">Isi file</h3>
+                <p className="text-xs text-slate-400">
+                  Hilangkan centang untuk menunda satu transfer tanpa menahan yang lain.
+                </p>
+              </div>
+              {expBusy && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="w-10 py-3 px-4"></th>
+                    {["No. PayReq", "Kode (keterangan transfer)", "Penerima", "Rekening tujuan", "Metode", "Nominal"].map((h) => (
+                      <th key={h} className={`${h === "Nominal" ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(expPreview?.lines || []).map((l) => {
+                    const on = !excluded.has(l.id);
+                    return (
+                      <tr key={l.id} className={`border-b border-slate-50 ${on ? "hover:bg-slate-50/50" : "opacity-40"}`}>
+                        <td className="py-3 px-4">
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() => setExcluded((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(l.id)) next.delete(l.id); else next.add(l.id);
+                              return next;
+                            })}
+                            className="rounded border-slate-300"
+                          />
+                        </td>
+                        <td className="py-3 px-4 text-sm">
+                          <button
+                            onClick={() => navigate(l.payreq_kind === "Reimbursement"
+                              ? `/reimbursement/${l.id}` : `/procurement/payreq/${l.id}`)}
+                            className="font-mono text-emerald-700 hover:underline"
+                          >
+                            {l.payreq_number}
+                          </button>
+                          {l.payreq_kind === "Reimbursement" && (
+                            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded border border-teal-200 bg-teal-50 text-teal-700 text-[10px] font-semibold uppercase tracking-wide">
+                              petani
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-sm text-slate-800">{l.payment_code}</td>
+                        <td className="py-3 px-4 text-sm text-slate-600">{l.beneficiary_name || "—"}</td>
+                        <td className="py-3 px-4 text-sm text-slate-600">
+                          <span className="font-mono">{l.bank_account}</span>
+                          <span className="block text-xs text-slate-400">
+                            {l.bank_name}{l.bank_code ? ` · ${l.bank_code}` : ""}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-600 text-xs font-semibold">
+                            {METHOD_HINT[l.method] || l.method}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-right font-mono font-semibold text-slate-900">{fmtRp(l.amount)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!expBusy && !(expPreview?.lines || []).length && (
+              <div className="p-12 text-center text-slate-400 text-sm">
+                {expPreview?.blockers.length
+                  ? "Semua payment request yang siap masih tertahan — lihat daftar di atas."
+                  : "Tidak ada payment request yang siap ditransfer untuk perusahaan ini."}
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+
       {tab === "upload" && (
         <>
           <Card className="p-6">
