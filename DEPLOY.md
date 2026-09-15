@@ -1,8 +1,14 @@
 # Deployment — VPS (Ubuntu) at app.nbsvworldwide.com
 
 One subdomain serves everything:
-`https://app.nbsvworldwide.com` → nginx serves the frontend and proxies
+`https://app.nbsvworldwide.com` → the web server serves the frontend and proxies
 `/api` + `/storage` to the Node backend (`agro-api`) on `127.0.0.1:3002`.
+
+> **The production VPS runs Apache, not nginx.** It hosts a dozen other sites that
+> were there first, so Apache owns :80 and :443 and the app is one vhost among them
+> (`agro-app.conf` + the certbot-generated `agro-app-le-ssl.conf`). Configs for both
+> servers ship in `deploy/`; §6 below gives Apache first because that is what is
+> actually running.
 
 > DNS already set: `app.nbsvworldwide.com  A  103.150.101.67`.
 
@@ -13,7 +19,7 @@ Assumes Ubuntu 22.04+. Adjust package commands for other distros.
 ## 1. Install prerequisites (on the VPS)
 ```bash
 sudo apt update
-sudo apt install -y nginx mysql-server git curl
+sudo apt install -y apache2 mysql-server git curl   # nginx instead, if starting clean
 # Node 20 LTS
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
@@ -85,7 +91,19 @@ npm ci
 npm run build
 ```
 
-## 6. nginx
+## 6. Web server
+
+### Apache — what production runs
+```bash
+sudo a2enmod proxy proxy_http rewrite ssl
+sudo cp /var/www/agro-web/deploy/apache-app.conf /etc/apache2/sites-available/agro-app.conf
+sudo a2ensite agro-app
+sudo apache2ctl configtest && sudo systemctl reload apache2
+```
+The vhost sets `DocumentRoot /var/www/agro-web/dist`, `FallbackResource /index.html`
+for the SPA routes, and `ProxyPass` for `/api`, `/storage` and `/health`.
+
+### nginx — only on a host that is not already serving other sites
 ```bash
 sudo cp /var/www/agro-web/deploy/nginx-app.conf /etc/nginx/sites-available/agro-app
 sudo ln -s /etc/nginx/sites-available/agro-app /etc/nginx/sites-enabled/
@@ -99,8 +117,9 @@ sudo ufw allow OpenSSH
 sudo ufw allow 'Nginx Full'
 sudo ufw enable
 
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d app.nbsvworldwide.com   # auto-configures HTTPS + redirect
+sudo apt install -y certbot python3-certbot-apache
+sudo certbot --apache -d app.nbsvworldwide.com  # auto-configures HTTPS + redirect
+# (on an nginx host: python3-certbot-nginx and `certbot --nginx`)
 ```
 Now visit **https://app.nbsvworldwide.com**.
 
@@ -111,11 +130,15 @@ Now visit **https://app.nbsvworldwide.com**.
 # backend
 cd /var/www/agro-api && git pull && npm ci && npm run build && pm2 restart agro-api
 # frontend
-cd /var/www/agro-web && git pull && npm ci && npm run build   # nginx picks up new dist automatically
+cd /var/www/agro-web && git pull && npm ci && npm run build   # the web server picks up the new dist itself
 ```
+`npm run build` writes straight into the `dist/` the vhost serves, so the site is
+briefly missing its assets while the build runs. Build to a temporary directory and
+swap it in if that matters; the deploys so far have kept a dated `dist.bak-*` copy
+beside it to roll back to.
 
 ## Notes / security
-- Do **not** expose ports 3002 (Node) or 3306 (MySQL) publicly — ufw only opens 22/80/443. The API and DB are reached only via localhost / nginx proxy.
+- Do **not** expose ports 3002 (Node) or 3306 (MySQL) publicly — only 22/80/443 are open. The API and DB are reached only via localhost / nginx proxy.
 - Change the seeded `finance01` password and use a strong `DB_PASSWORD` + `JWT_SECRET`.
 - Uploads live in `agro-api/storage/` (git-ignored). Back this folder up along with a `mysqldump` of `agro_supply`.
 - `npm run db:reset` **drops and recreates** the database — only run it on first setup or when you intend to wipe data. For migrations later, apply SQL manually instead.
