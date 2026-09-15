@@ -7,6 +7,7 @@ import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
+import { ShowUsedSources } from "../../components/ShowUsedSources";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -24,9 +25,19 @@ export default function PurchaseOrderCreate() {
   const isEdit = !!id;
   const { data: vendors } = useApi<Vendor[]>("vendors");
   const { data: budgetCodes } = useApi<BudgetCode[]>("budget-codes");
-  const { data: prs } = useApi<PROption[]>("purchase-requests", { status: "Approved" });
 
   const [prId, setPrId] = useState("");
+  // The picker offers the requests no order has been raised from yet, which is
+  // what stops a second PO being cut against the same PR by accident. Splitting
+  // one request across several vendors is still legitimate, so the switch below
+  // brings the used ones back; `include_id` keeps the PR of the order being
+  // edited in the list, since that one is used by definition.
+  const [showUsedPr, setShowUsedPr] = useState(false);
+  const { data: prs } = useApi<PROption[]>("purchase-requests", {
+    status: "Approved",
+    unused_for: showUsedPr ? "" : "po",
+    include_id: prId || "",
+  });
   const [vendorId, setVendorId] = useState("");
   const [budgetCodeId, setBudgetCodeId] = useState("");
   // Budget code is chosen once in the chain. A request already carries one per
@@ -163,11 +174,17 @@ export default function PurchaseOrderCreate() {
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Informasi Umum</h2>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="text-xs text-slate-500 font-medium mb-1.5 block">Sumber PR <span className="text-red-500">*</span></label>
+              <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                <label className="text-xs text-slate-500 font-medium">Sumber PR <span className="text-red-500">*</span></label>
+                <ShowUsedSources checked={showUsedPr} onChange={setShowUsedPr} />
+              </div>
               <select value={prId} onChange={(e) => setPrId(e.target.value)} className={selectCls}>
                 <option value="">Pilih PR…</option>
                 {(prs || []).map((p) => <option key={p.id} value={p.id}>{p.pr_number}{p.entity_name ? ` · ${p.entity_name}` : ""}</option>)}
               </select>
+              {!showUsedPr && (prs || []).length === 0 && (
+                <p className="text-[11px] text-slate-400 mt-1">Semua PR yang disetujui sudah punya PO.</p>
+              )}
             </div>
             {/* No entity field at all: both routes into a PO start at a PR, so the PR
                 settles which PT is buying, and the PR dropdown above already prints it. */}

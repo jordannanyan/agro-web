@@ -9,6 +9,7 @@ import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { canWriteOperations } from "../../lib/permissions";
 import { useAuth } from "../../store/AuthContext";
+import { ShowUsedSources } from "../../components/ShowUsedSources";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -26,12 +27,24 @@ interface SellingRow {
   warehouse?: { id: number; warehouse_name: string } | null; commodity?: { commodities_name: string } | null;
 }
 
-function SellingModal({ onClose, onSaved, processings, offtakers, warehouses, costTypes, editRow }: {
-  onClose: () => void; onSaved: () => void; processings: ProcessingLite[]; offtakers: Offtaker[];
+function SellingModal({ onClose, onSaved, offtakers, warehouses, costTypes, editRow }: {
+  onClose: () => void; onSaved: () => void; offtakers: Offtaker[];
   warehouses: Warehouse[]; costTypes: PreFinanceType[]; editRow?: SellingRow | null;
 }) {
   const isEdit = !!editRow;
   const [processingId, setProcessingId] = useState(editRow?.processing?.id ? String(editRow.processing.id) : "");
+  // The batch list is fetched here rather than by the page, because it depends on
+  // the switch below: by default it offers only the batches nothing has been sold
+  // out of, which is what keeps one batch from being invoiced twice. Splitting a
+  // batch across two offtakers is real — production has four of them — so the
+  // switch brings the rest back, and `include_id` keeps the batch of the sale
+  // being edited in the list.
+  const [showUsedBatch, setShowUsedBatch] = useState(false);
+  const { data: processingList } = useApi<ProcessingLite[]>("processing", {
+    unused_for: showUsedBatch ? "" : "selling",
+    include_id: processingId || "",
+  });
+  const processings = processingList || [];
   const [offtakerId, setOfftakerId] = useState(editRow?.offtaker?.id ? String(editRow.offtaker.id) : "");
   const [warehouseId, setWarehouseId] = useState(editRow?.warehouse?.id ? String(editRow.warehouse.id) : "");
   const [date, setDate] = useState(editRow?.date ? String(editRow.date).slice(0, 10) : new Date().toISOString().slice(0, 10));
@@ -107,7 +120,7 @@ function SellingModal({ onClose, onSaved, processings, offtakers, warehouses, co
         </div>
         <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs text-slate-600 mb-1.5 block">Batch Processing *</Label><select value={processingId} onChange={(e) => setProcessingId(e.target.value)} className={selectCls}><option value="">Pilih batch…</option>{processings.map((p) => <option key={p.id} value={p.id}>{p.processing_code} · {p.commodity?.commodities_name}</option>)}</select></div>
+            <div><div className="flex items-baseline justify-between gap-2 mb-1.5"><Label className="text-xs text-slate-600">Batch Processing *</Label><ShowUsedSources checked={showUsedBatch} onChange={setShowUsedBatch} /></div><select value={processingId} onChange={(e) => setProcessingId(e.target.value)} className={selectCls}><option value="">Pilih batch…</option>{processings.map((p) => <option key={p.id} value={p.id}>{p.processing_code} · {p.commodity?.commodities_name}</option>)}</select>{!showUsedBatch && processings.length === 0 && <p className="text-[11px] text-slate-400 mt-1">Semua batch sudah terjual.</p>}</div>
             <div><Label className="text-xs text-slate-600 mb-1.5 block">Offtaker</Label><select value={offtakerId} onChange={(e) => setOfftakerId(e.target.value)} className={selectCls}><option value="">—</option>{offtakers.map((o) => <option key={o.id} value={o.id}>{o.offtaker_name}</option>)}</select></div>
             <div><Label className="text-xs text-slate-600 mb-1.5 block">Tanggal *</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
             <div><Label className="text-xs text-slate-600 mb-1.5 block">Gudang</Label><select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={selectCls}><option value="">—</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}</select></div>
@@ -177,7 +190,6 @@ function SellingModal({ onClose, onSaved, processings, offtakers, warehouses, co
 export default function Selling() {
   const mayWrite = canWriteOperations(useAuth().user);
   const { data: rows, loading, error, refetch } = useApi<SellingRow[]>("selling");
-  const { data: processings } = useApi<ProcessingLite[]>("processing");
   const { data: offtakers } = useApi<Offtaker[]>("offtakers");
   const { data: warehouses } = useApi<Warehouse[]>("warehouses");
   const { data: costTypes } = useApi<PreFinanceType[]>("pre-finance-types");
@@ -196,7 +208,7 @@ export default function Selling() {
 
   return (
     <div className="space-y-6 pb-8">
-      {showModal && <SellingModal onClose={() => { setShowModal(false); setEditRow(null); }} onSaved={refetch} processings={processings || []} offtakers={offtakers || []} warehouses={warehouses || []} costTypes={costTypes || []} editRow={editRow} />}
+      {showModal && <SellingModal onClose={() => { setShowModal(false); setEditRow(null); }} onSaved={refetch} offtakers={offtakers || []} warehouses={warehouses || []} costTypes={costTypes || []} editRow={editRow} />}
       <div className="flex items-start justify-between">
         <div><h1 className="text-2xl text-slate-900 mb-1">Selling</h1><p className="text-sm text-slate-500">Penjualan hasil olahan ke offtaker</p></div>
         {mayWrite && <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { setEditRow(null); setShowModal(true); }}><Plus className="w-4 h-4 mr-2" />Catat Penjualan</Button>}

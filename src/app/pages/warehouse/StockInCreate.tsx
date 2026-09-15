@@ -7,6 +7,7 @@ import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
+import { ShowUsedSources } from "../../components/ShowUsedSources";
 
 interface Warehouse { id: number; warehouse_name: string; }
 interface Sapropdi { id: number; sapropdi_name: string; }
@@ -29,9 +30,16 @@ export default function StockInCreate() {
   const navigate = useNavigate();
   const { data: warehouses } = useApi<Warehouse[]>("warehouses");
   const { data: sapropdi } = useApi<Sapropdi[]>("sapropdi");
-  const { data: pos } = useApi<POOption[]>("purchase-orders");
 
   const [poId, setPoId] = useState("");
+  // Only the orders nothing has been received against, so the same delivery is
+  // not booked into the warehouse twice. A staged delivery — part now, the rest
+  // next week — is what the switch is for.
+  const [showUsedPo, setShowUsedPo] = useState(false);
+  const { data: pos } = useApi<POOption[]>("purchase-orders", {
+    unused_for: showUsedPo ? "" : "stock_in",
+    include_id: poId || "",
+  });
   const [warehouseId, setWarehouseId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [deliveryNote, setDeliveryNote] = useState("");
@@ -112,7 +120,7 @@ export default function StockInCreate() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Informasi Penerimaan</h2>
           <div className="grid grid-cols-3 gap-4">
-            <div><label className="text-xs text-slate-500 font-medium mb-1.5 block">Sumber PO (opsional)</label><select value={poId} onChange={(e) => setPoId(e.target.value)} className={selectCls}><option value="">— tanpa PO —</option>{(pos || []).map((p) => <option key={p.id} value={p.id}>{p.po_number}</option>)}</select></div>
+            <div><div className="flex items-baseline justify-between gap-2 mb-1.5"><label className="text-xs text-slate-500 font-medium">Sumber PO (opsional)</label><ShowUsedSources checked={showUsedPo} onChange={setShowUsedPo} /></div><select value={poId} onChange={(e) => setPoId(e.target.value)} className={selectCls}><option value="">— tanpa PO —</option>{(pos || []).map((p) => <option key={p.id} value={p.id}>{p.po_number}</option>)}</select>{!showUsedPo && (pos || []).length === 0 && <p className="text-[11px] text-slate-400 mt-1">Semua PO sudah pernah diterima.</p>}</div>
             <div><label className="text-xs text-slate-500 font-medium mb-1.5 block">Gudang <span className="text-red-500">*</span></label><select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={selectCls}><option value="">Pilih…</option>{(warehouses || []).map((w) => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}</select></div>
             <div><label className="text-xs text-slate-500 font-medium mb-1.5 block">Tanggal <span className="text-red-500">*</span></label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
             <div><label className="text-xs text-slate-500 font-medium mb-1.5 block">No. Surat Jalan</label><Input value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} placeholder="DO-xxxx" /></div>

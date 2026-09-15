@@ -7,6 +7,7 @@ import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
+import { ShowUsedSources } from "../../components/ShowUsedSources";
 
 interface BudgetCode { id: number; code: string; }
 interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; grand_total: number; }
@@ -20,8 +21,6 @@ export default function PaymentRequestCreate() {
   const { id } = useParams();
   const isEdit = !!id;
   const { data: budgetCodes } = useApi<BudgetCode[]>("budget-codes");
-  const { data: prs } = useApi<PROption[]>("purchase-requests", { status: "Approved" });
-  const { data: pos } = useApi<POOption[]>("purchase-orders");
   // The bank has to be picked rather than typed: an export file carries the bank
   // *code*, and "BCA" / "bca" / "Bank BCA" are not one.
   const { data: banks } = useApi<BankOption[]>("banks", { is_active: 1 });
@@ -29,6 +28,21 @@ export default function PaymentRequestCreate() {
   const [sourceType, setSourceType] = useState<"PO" | "PR">("PO");
   const [prId, setPrId] = useState("");
   const [poId, setPoId] = useState("");
+  // Both pickers drop the documents a payment has already been raised against, so
+  // the same order cannot be paid twice by accident. The PR list drops one more
+  // thing: a request that became an order is paid through that order, never
+  // straight off the request. Instalments are real, so the switch restores the
+  // full list, and `include_id` holds on to the source of the request being edited.
+  const [showUsedSource, setShowUsedSource] = useState(false);
+  const { data: prs } = useApi<PROption[]>("purchase-requests", {
+    status: "Approved",
+    unused_for: showUsedSource ? "" : "payreq",
+    include_id: prId || "",
+  });
+  const { data: pos } = useApi<POOption[]>("purchase-orders", {
+    unused_for: showUsedSource ? "" : "payreq",
+    include_id: poId || "",
+  });
   const [budgetCodeId, setBudgetCodeId] = useState("");
   // The code the source document already carries. A payment does not classify the
   // spend a second time - the PO (or the PR it came straight from) settled that -
@@ -177,12 +191,26 @@ export default function PaymentRequestCreate() {
             ))}
           </div>
           {sourceType === "PR" ? (
-            <div><label className={label}>Pilih PR <span className="text-red-500">*</span></label>
+            <div>
+              <div className="flex items-baseline justify-between gap-2">
+                <label className={label}>Pilih PR <span className="text-red-500">*</span></label>
+                <ShowUsedSources checked={showUsedSource} onChange={setShowUsedSource} />
+              </div>
               <select value={prId} onChange={(e) => setPrId(e.target.value)} className={selectCls}><option value="">Pilih PR…</option>{(prs || []).map((p) => <option key={p.id} value={p.id}>{p.pr_number}{p.entity_name ? ` · ${p.entity_name}` : ""}</option>)}</select>
+              {!showUsedSource && (prs || []).length === 0 && (
+                <p className="text-[11px] text-slate-400 mt-1">Tidak ada PR yang belum dibayar atau belum jadi PO.</p>
+              )}
             </div>
           ) : (
-            <div><label className={label}>Pilih PO <span className="text-red-500">*</span></label>
+            <div>
+              <div className="flex items-baseline justify-between gap-2">
+                <label className={label}>Pilih PO <span className="text-red-500">*</span></label>
+                <ShowUsedSources checked={showUsedSource} onChange={setShowUsedSource} />
+              </div>
               <select value={poId} onChange={(e) => setPoId(e.target.value)} className={selectCls}><option value="">Pilih PO…</option>{(pos || []).map((p) => <option key={p.id} value={p.id}>{p.po_number}{p.entity_name ? ` · ${p.entity_name}` : ""}</option>)}</select>
+              {!showUsedSource && (pos || []).length === 0 && (
+                <p className="text-[11px] text-slate-400 mt-1">Semua PO sudah punya Payment Request.</p>
+              )}
             </div>
           )}
         </div>
