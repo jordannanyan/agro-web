@@ -132,17 +132,6 @@ export function canRecordPayment(roleCode: string | null | undefined): boolean {
     || roleCode === ROLE.SUPER_ADMIN;
 }
 
-/**
- * May this role mark a payment paid *without* a statement line to show for it?
- *
- * Only the break-glass account. A payment request is settled by reconciling it
- * against the bank — that is the control, and letting finance tick a box instead
- * would quietly remove it. The API enforces the same rule and demands a reason.
- */
-export function canOverridePayment(roleCode: string | null | undefined): boolean {
-  return roleCode === ROLE.SUPER_ADMIN;
-}
-
 // -----------------------------------------------------------------------------
 // Editing and resubmitting procurement documents.
 //
