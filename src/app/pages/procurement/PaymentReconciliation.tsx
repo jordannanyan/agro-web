@@ -10,12 +10,12 @@
 // people to trust a parser they cannot inspect is how reconciliation stops being
 // checked at all.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   FileSpreadsheet, Upload, CheckCircle2, AlertTriangle, HelpCircle, Copy, Check,
   Clock, History, ArrowRight, X, Banknote, Lock, Eye, EyeOff, ShieldCheck, ShieldAlert,
-  Download, Landmark, Loader2,
+  Download, Landmark, Loader2, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../../components/ui/card";
@@ -39,6 +39,7 @@ const VERDICT: Record<string, { label: string; hint: string; cls: string; icon: 
   already_paid:     { label: "Sudah Paid",       hint: "Pembayaran ini sudah pernah direkonsiliasi",             cls: "bg-slate-100 text-slate-500 border-slate-200",     icon: Check,        group: "quiet" },
   duplicate:        { label: "Duplikat",         hint: "Baris yang sama sudah pernah diunggah",                  cls: "bg-slate-100 text-slate-500 border-slate-200",     icon: Check,        group: "quiet" },
   incoming:         { label: "Dana masuk",       hint: "Bukan pembayaran keluar",                                cls: "bg-sky-50 text-sky-600 border-sky-200",           icon: ArrowRight,   group: "quiet" },
+  manual_match:     { label: "Cocok (manual)",   hint: "Dicocokkan orang ke sebuah payment request → jadi Paid",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: Link2,        group: "paid" },
 };
 
 interface Line {
@@ -234,6 +235,14 @@ interface Outstanding {
   kth_name?: string | null;
 }
 
+/** An outgoing line from some past import that nothing has accounted for yet. */
+interface UnmatchedLine {
+  id: number; import_id: number; row_no: number | null; tx_date: string | null;
+  remark: string; amount_out: number; detected_code: string | null;
+  match_status: string; match_note: string | null;
+  file_name: string; imported_at: string;
+}
+
 interface ImportRow {
   id: number; file_name: string; uploaded_by_name: string | null; created_at: string;
   period_start: string | null; period_end: string | null; total_rows: number;
@@ -302,7 +311,7 @@ export default function PaymentReconciliation() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [applied, setApplied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"export" | "upload" | "outstanding" | "history">("export");
+  const [tab, setTab] = useState<"export" | "upload" | "unmatched" | "outstanding" | "history">("export");
   // Only for the encrypted exports the bank e-mails out. It is sent with the file
   // and never stored — not here, not on the server — so it has to be re-typed if
   // the same file is uploaded again.
@@ -394,6 +403,37 @@ export default function PaymentReconciliation() {
   const { data: outstanding, refetch: refetchOutstanding } =
     useApi<Outstanding[]>("bank-statements/outstanding");
   const { data: history, refetch: refetchHistory } = useApi<ImportRow[]>("bank-statements");
+  // The leftovers of every past import, in one list. What finance has to clear is
+  // the lines nothing accounted for, and which file produced them is a detail.
+  const { data: unmatched, refetch: refetchUnmatched } =
+    useApi<UnmatchedLine[]>("bank-statements/lines/unmatched");
+  const [matchLine, setMatchLine] = useState<number | null>(null);
+  const [matchPayreq, setMatchPayreq] = useState("");
+  const [matchNote, setMatchNote] = useState("");
+  const [matching, setMatching] = useState(false);
+
+  function openMatch(lineId: number) {
+    setMatchLine((cur) => (cur === lineId ? null : lineId));
+    setMatchPayreq("");
+    setMatchNote("");
+  }
+
+  async function submitMatch(line: UnmatchedLine) {
+    if (!matchPayreq) { toast.error("Pilih payment request yang dimaksud"); return; }
+    setMatching(true);
+    try {
+      const res = await api.post<any>(`bank-statements/lines/${line.id}/match`, {
+        payment_request_id: Number(matchPayreq),
+        note: matchNote || undefined,
+      });
+      toast.success(res?.message || "Pembayaran dicocokkan");
+      setMatchLine(null); setMatchPayreq(""); setMatchNote("");
+      refetchUnmatched(); refetchOutstanding(); refetchHistory();
+      refreshInbox(); // it leaves finance's "siap dibayar" queue
+    } catch (e: any) {
+      toast.error(e?.message || "Gagal mencocokkan");
+    } finally { setMatching(false); }
+  }
 
   const totalOutstanding = useMemo(
     () => (outstanding || []).reduce((s, o) => s + Number(o.amount || 0), 0), [outstanding]);
@@ -470,6 +510,9 @@ export default function PaymentReconciliation() {
       <div className="flex items-center gap-1">
         <button className={tabCls("export")} onClick={() => setTab("export")}>Export Transfer Kopra</button>
         <button className={tabCls("upload")} onClick={() => setTab("upload")}>Unggah & Cocokkan</button>
+        <button className={tabCls("unmatched")} onClick={() => setTab("unmatched")}>
+          Belum Cocok{unmatched?.length ? ` (${unmatched.length})` : ""}
+        </button>
         <button className={tabCls("outstanding")} onClick={() => setTab("outstanding")}>
           Belum Terbayar{outstanding?.length ? ` (${outstanding.length})` : ""}
         </button>
@@ -883,6 +926,122 @@ export default function PaymentReconciliation() {
       )}
 
       {/* ── Belum terbayar ──────────────────────────────────────────────────── */}
+      {/* -- Belum cocok ----------------------------------------------------- */}
+      {/* The other half of the exception list. Reconciliation settles only the lines
+          whose code and amount agree; these are the ones a person has to read and
+          say what they were. Matching one here still settles against a real bank
+          row -- what the person supplies is the single thing the parser could not
+          work out: which request the transfer paid. */}
+      {tab === "unmatched" && (
+        <Card className="p-0">
+          <div className="p-5 border-b border-slate-100">
+            <h3 className="text-slate-800 font-semibold">Uang keluar yang belum ada pemiliknya</h3>
+            <p className="text-xs text-slate-400 max-w-3xl">
+              Baris rekening koran yang sudah diunggah tetapi tidak bisa dicocokkan sendiri oleh sistem —
+              biasanya karena kode pembayaran tidak tertulis di keterangan transfer. Uangnya nyata dan sudah
+              keluar; yang kurang hanya keterangan payment request mana yang dibayarnya.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  {["Tanggal", "Keterangan Transfer", "Nominal Keluar", "Status", "Dari File", ""].map((h) => (
+                    <th key={h} className={`${h === "Nominal Keluar" ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(unmatched || []).map((l) => {
+                  const open = matchLine === l.id;
+                  const picked = (outstanding || []).find((o) => String(o.id) === matchPayreq);
+                  const diff = picked ? Number(l.amount_out) - Number(picked.amount) : 0;
+                  return (
+                    <Fragment key={l.id}>
+                      <tr className="border-b border-slate-50 hover:bg-slate-50/50">
+                        <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{l.tx_date || "—"}</td>
+                        <td className="py-3 px-4 text-sm text-slate-700 max-w-md"><span className="line-clamp-2">{l.remark || "—"}</span></td>
+                        <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-slate-900 whitespace-nowrap">{fmtRp(l.amount_out)}</td>
+                        <td className="py-3 px-4"><VerdictBadge status={l.match_status} /></td>
+                        <td className="py-3 px-4 text-xs text-slate-400 max-w-[14rem] truncate" title={l.file_name}>{l.file_name}</td>
+                        <td className="py-3 px-4 text-right">
+                          <Button size="sm" variant={open ? "secondary" : "outline"} onClick={() => openMatch(l.id)}>
+                            <Link2 className="w-4 h-4 mr-1.5" />{open ? "Batal" : "Cocokkan"}
+                          </Button>
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr className="border-b border-slate-100 bg-emerald-50/30">
+                          <td colSpan={6} className="px-4 py-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+                              <div>
+                                <label className="text-xs text-slate-500 font-medium mb-1 block">Payment Request yang dibayar</label>
+                                <select
+                                  value={matchPayreq}
+                                  onChange={(e) => setMatchPayreq(e.target.value)}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                                >
+                                  <option value="">— pilih —</option>
+                                  {(outstanding || []).map((o) => (
+                                    <option key={o.id} value={o.id}>
+                                      {o.payreq_number} · {fmtRp(o.amount)}{o.beneficiary_name ? ` · ${o.beneficiary_name}` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                  Hanya yang sudah disetujui penuh dan belum terbayar yang muncul di sini.
+                                </p>
+                              </div>
+                              <div>
+                                <label className="text-xs text-slate-500 font-medium mb-1 block">
+                                  Alasan {diff ? <span className="text-red-500">(wajib bila nominal beda jauh)</span> : <span className="text-slate-300">(opsional)</span>}
+                                </label>
+                                <input
+                                  value={matchNote}
+                                  onChange={(e) => setMatchNote(e.target.value)}
+                                  placeholder="Mis. kode lupa ditulis di berita transfer"
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                {picked && (
+                                  <div className={`rounded-lg px-3 py-2 text-xs ${diff === 0 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+                                    {diff === 0
+                                      ? "Nominal sama persis dengan permintaan."
+                                      : `Nominal beda ${fmtRp(Math.abs(diff))} — diminta ${fmtRp(picked.amount)}, keluar ${fmtRp(l.amount_out)}.`}
+                                  </div>
+                                )}
+                                <Button
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  disabled={matching || !matchPayreq}
+                                  onClick={() => submitMatch(l)}
+                                >
+                                  {matching ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Banknote className="w-4 h-4 mr-1.5" />}
+                                  {matching ? "Menyimpan…" : "Lunaskan dari baris ini"}
+                                </Button>
+                                <p className="text-[11px] text-slate-400">
+                                  Tanggal bayar diambil dari tanggal baris ini ({l.tx_date || "—"}), bukan hari ini.
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {!(unmatched || []).length && (
+            <div className="p-16 text-center">
+              <CheckCircle2 className="w-8 h-8 text-emerald-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">Tidak ada baris yang menggantung — setiap pengeluaran sudah ada pemiliknya.</p>
+            </div>
+          )}
+        </Card>
+      )}
+
       {tab === "outstanding" && (
         <Card className="p-0">
           <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-4">
