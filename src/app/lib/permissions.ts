@@ -132,6 +132,23 @@ export function canRecordPayment(roleCode: string | null | undefined): boolean {
     || roleCode === ROLE.SUPER_ADMIN;
 }
 
+/**
+ * May this role mark a payment paid *without* a statement line to show for it?
+ *
+ * Only the break-glass account. A payment request is settled by reconciling it
+ * against the bank — that is the control, and letting finance tick a box instead
+ * would quietly remove it. The API enforces the same rule and demands a reason.
+ *
+ * Why it is not simply gone: reconciliation settles only the lines whose payment
+ * code and amount agree, and no screen can match a stored line by hand afterwards.
+ * A transfer that really happened but lost its code in the remark would otherwise
+ * leave its request Approved for ever. This is the way out until manual matching
+ * exists.
+ */
+export function canOverridePayment(roleCode: string | null | undefined): boolean {
+  return roleCode === ROLE.SUPER_ADMIN;
+}
+
 // -----------------------------------------------------------------------------
 // Editing and resubmitting procurement documents.
 //
