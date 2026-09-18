@@ -125,7 +125,7 @@ export default function ReimbursementCreate() {
             }))
           : [blankLine()]);
       } catch (e: any) {
-        toast.error(e?.message || "Gagal memuat reimbursement");
+        toast.error(e?.message || "Gagal memuat payment request");
       }
     })();
   }, [id]);
@@ -247,13 +247,13 @@ export default function ReimbursementCreate() {
         ? await api.put<any>(`reimbursements/${id}`, payload)
         : await api.post<any>("reimbursements", payload);
       toast.success(
-        status === "Draft" ? "Reimbursement disimpan draft"
+        status === "Draft" ? "Payment Request disimpan draft"
           : status === "keep" ? "Perubahan revisi disimpan"
           : isRevision ? "Dikirim ulang untuk approval"
           : "Diajukan untuk approval");
       navigate(`/reimbursement/${isEdit ? id : res.id}`);
     } catch (e: any) {
-      toast.error(e?.message || "Gagal menyimpan reimbursement");
+      toast.error(e?.message || "Gagal menyimpan payment request");
     } finally { setSaving(false); }
   }
 
@@ -273,9 +273,9 @@ export default function ReimbursementCreate() {
             </div>
             <div>
               <h1 className="text-slate-900 font-semibold text-lg">
-                {isRevision ? "Revisi" : isEdit ? "Edit" : "Buat"} Reimbursement
+                {isRevision ? "Revisi" : isEdit ? "Edit" : "Buat"} Payment Request
               </h1>
-              <p className="text-slate-500 text-sm">Pembayaran petani lewat rekening KTH</p>
+              <p className="text-slate-500 text-sm">Upah tenaga kerja kebun · dibayar lewat rekening KTH</p>
             </div>
           </div>
         </div>

@@ -111,15 +111,15 @@ export default function ReimbursementList() {
             <HandCoins className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h1 className="text-slate-900 font-semibold text-lg">Reimbursement Petani</h1>
+            <h1 className="text-slate-900 font-semibold text-lg">Payment Request Lapangan</h1>
             <p className="text-slate-500 text-sm">
-              Satu transfer ke rekening KTH · rinciannya per petani
+              Upah tenaga kerja kebun · satu transfer ke rekening KTH
             </p>
           </div>
           {mayCreate && (
             <Button className="ml-auto bg-teal-600 hover:bg-teal-700 text-white"
               onClick={() => navigate("/reimbursement/create")}>
-              <Plus className="w-4 h-4 mr-1.5" />Buat Reimbursement
+              <Plus className="w-4 h-4 mr-1.5" />Buat Payment Request
             </Button>
           )}
         </div>
@@ -165,7 +165,7 @@ export default function ReimbursementList() {
           {!loading && !error && rows.length === 0 && (
             <div className="px-5 py-16 text-center">
               <HandCoins className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-              <p className="text-sm text-slate-400">Belum ada reimbursement pada filter ini.</p>
+              <p className="text-sm text-slate-400">Belum ada payment request pada filter ini.</p>
             </div>
           )}
 

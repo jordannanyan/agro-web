@@ -99,7 +99,12 @@ const menuItems = [
   },
   // Bukan bagian Procurement: tidak ada yang dibeli, dan yang mengajukannya Field
   // Admin — orang yang tidak boleh masuk ke menu Procurement sama sekali.
-  { id: "reimbursement", icon: HandCoins, label: "Reimbursement Petani", path: "/reimbursement" },
+  //
+  // Namanya tetap "Payment Request" karena begitulah formulir kertasnya berjudul dan
+  // begitu pula orang-orangnya menyebutnya; "Lapangan" yang membedakannya dari
+  // Payment Request procurement di menu sebelah. Rutenya tetap /reimbursement —
+  // tautan di notifikasi yang sudah tersimpan mengarah ke sana.
+  { id: "reimbursement", icon: HandCoins, label: "Payment Request Lapangan", path: "/reimbursement" },
   { id: "map", icon: MapIcon, label: "Map Monitoring", path: "/map" },
   { id: "reports", icon: FileText, label: "Laporan", path: "/reports" },
   { id: "settings", icon: Settings, label: "Settings", path: "/settings" },
