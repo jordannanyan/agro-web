@@ -30,10 +30,44 @@ interface Kth {
 interface Farmer { id: number; farmer_name: string; no_rek: string | null }
 interface BudgetCode { id: number; code: string }
 
-interface Line { key: string; farmer_id: string; description: string; amount: string }
+type Category = "DailyWorker" | "LabourLoanPreFinance" | "LabourLoanProfitSharing";
+
+const CATEGORY_LABEL: Record<Category, string> = {
+  DailyWorker: "Daily worker",
+  LabourLoanPreFinance: "Labour loan — pre finance",
+  LabourLoanProfitSharing: "Labour loan — profit sharing",
+};
+
+/**
+ * One line of the form the field admins actually file.
+ *
+ * `farmer_name` is who is paid — usually a daily worker, so it is typed rather than
+ * picked, with the KTH's farmers offered as suggestions. `on_behalf_name` is whose
+ * land or loan the work was on, which is the farmer the cost belongs to. Keeping
+ * them apart is the whole point: the money goes one way and the debt the other.
+ */
+interface Line {
+  key: string;
+  farmer_id: string;
+  farmer_name: string;
+  category: Category;
+  on_behalf_farmer_id: string;
+  on_behalf_name: string;
+  description: string;
+  rate: string;
+  work_days: string;
+  work_dates: string;
+  amount: string;
+  recipient_bank_name: string;
+  recipient_bank_account: string;
+}
 
 const blankLine = (): Line => ({
-  key: Math.random().toString(36).slice(2), farmer_id: "", description: "", amount: "",
+  key: Math.random().toString(36).slice(2),
+  farmer_id: "", farmer_name: "", category: "DailyWorker",
+  on_behalf_farmer_id: "", on_behalf_name: "",
+  description: "", rate: "", work_days: "", work_dates: "", amount: "",
+  recipient_bank_name: "", recipient_bank_account: "",
 });
 
 export default function ReimbursementCreate() {
@@ -77,8 +111,17 @@ export default function ReimbursementCreate() {
           ? d.items.map((it: any) => ({
               key: `i${it.id}`,
               farmer_id: String(it.farmer_id ?? ""),
+              farmer_name: it.farmer_name ?? "",
+              category: (it.category ?? "DailyWorker") as Category,
+              on_behalf_farmer_id: String(it.on_behalf_farmer_id ?? ""),
+              on_behalf_name: it.on_behalf_name ?? "",
               description: it.description ?? "",
+              rate: it.rate != null ? String(it.rate) : "",
+              work_days: it.work_days != null ? String(it.work_days) : "",
+              work_dates: it.work_dates ?? "",
               amount: String(it.amount ?? ""),
+              recipient_bank_name: it.recipient_bank_name ?? "",
+              recipient_bank_account: it.recipient_bank_account ?? "",
             }))
           : [blankLine()]);
       } catch (e: any) {
@@ -87,38 +130,80 @@ export default function ReimbursementCreate() {
     })();
   }, [id]);
 
-  // Changing the KTH changes which farmers are selectable, so lines pointing at
-  // the old one are cleared rather than silently submitted against a farmer who
-  // is not in this group.
+  // Changing the KTH changes which farmers the suggestions come from, so a line
+  // that had been matched to one of the old group's farmers loses that link. The
+  // typed name stays: it is what somebody keyed in, and throwing away their typing
+  // because they corrected the KTH would be its own bug.
   useEffect(() => {
     if (loadedOnce.current) { loadedOnce.current = false; return; }
-    setLines((prev) => prev.map((l) => ({ ...l, farmer_id: "" })));
+    setLines((prev) => prev.map((l) => ({ ...l, farmer_id: "", on_behalf_farmer_id: "" })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kthId]);
 
   const kth = useMemo(() => (kths || []).find((k) => String(k.id) === kthId) || null, [kths, kthId]);
   const total = lines.reduce((t, l) => t + (Number(l.amount) || 0), 0);
-  const filled = lines.filter((l) => l.farmer_id && Number(l.amount) > 0);
+  const filled = lines.filter((l) => l.farmer_name.trim() && Number(l.amount) > 0);
 
-  const usedFarmers = lines.map((l) => l.farmer_id).filter(Boolean);
-  const duplicate = usedFarmers.length !== new Set(usedFarmers).size;
+  /**
+   * The two recaps the paper form prints, computed live so the person filling it in
+   * can check against the sheet in front of them before anybody else has to.
+   */
+  const recap = useMemo(() => {
+    const scheme = new Map<string, { label: string; amount: number }>();
+    const recipient = new Map<string, { name: string; amount: number }>();
+    for (const l of filled) {
+      const amount = Number(l.amount) || 0;
+      const owner = l.category === "DailyWorker" ? "" : l.on_behalf_name.trim();
+      const key = `${l.category}|${owner}`;
+      const label = owner ? `${owner} — ${CATEGORY_LABEL[l.category]}` : CATEGORY_LABEL[l.category];
+      scheme.set(key, { label, amount: (scheme.get(key)?.amount || 0) + amount });
+      const rk = l.farmer_name.trim().toLowerCase();
+      recipient.set(rk, { name: l.farmer_name.trim(), amount: (recipient.get(rk)?.amount || 0) + amount });
+    }
+    const byAmount = (a: any, b: any) => b.amount - a.amount;
+    return {
+      scheme: [...scheme.values()].sort(byAmount),
+      recipient: [...recipient.values()].sort(byAmount),
+    };
+  }, [filled]);
+
+  /** A labour loan has to say whose loan it is, or the by-scheme recap cannot name it. */
+  const missingOwner = lines.some(
+    (l) => l.category !== "DailyWorker" && Number(l.amount) > 0 && !l.on_behalf_name.trim());
 
   function setLine(key: string, patch: Partial<Line>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  }
+
+  /**
+   * Typing a name that exactly matches one of the KTH's farmers links the line to
+   * that farmer; anything else stays free text. Most of these people are daily
+   * workers who are in no master list, and refusing to record them is what kept the
+   * form in Google Docs.
+   */
+  function setName(key: string, field: "farmer" | "on_behalf", value: string) {
+    const match = (farmers || []).find(
+      (f) => f.farmer_name.trim().toLowerCase() === value.trim().toLowerCase());
+    setLines((prev) => prev.map((l) => (l.key !== key ? l : field === "farmer"
+      ? { ...l, farmer_name: value, farmer_id: match ? String(match.id) : "" }
+      : { ...l, on_behalf_name: value, on_behalf_farmer_id: match ? String(match.id) : "" })));
   }
   function addLine() { setLines((prev) => [...prev, blankLine()]); }
   function removeLine(key: string) {
     setLines((prev) => (prev.length === 1 ? [blankLine()] : prev.filter((l) => l.key !== key)));
   }
 
-  /** Everyone in this KTH who is not on the list yet, in one go. */
+  /** Everyone in this KTH who is not named yet, in one go. */
   function addAllFarmers() {
-    const already = new Set(usedFarmers);
-    const rest = (farmers || []).filter((f) => !already.has(String(f.id)));
+    const already = new Set(lines.map((l) => l.farmer_name.trim().toLowerCase()).filter(Boolean));
+    const rest = (farmers || []).filter((f) => !already.has(f.farmer_name.trim().toLowerCase()));
     if (!rest.length) { toast.info("Semua petani KTH ini sudah ada di daftar"); return; }
     setLines((prev) => [
-      ...prev.filter((l) => l.farmer_id || Number(l.amount) > 0),
-      ...rest.map((f) => ({ ...blankLine(), farmer_id: String(f.id) })),
+      ...prev.filter((l) => l.farmer_name.trim() || Number(l.amount) > 0),
+      ...rest.map((f) => ({
+        ...blankLine(), farmer_id: String(f.id), farmer_name: f.farmer_name,
+        recipient_bank_account: f.no_rek ?? "",
+      })),
     ]);
   }
 
@@ -128,10 +213,11 @@ export default function ReimbursementCreate() {
       toast.error(`KTH ${kth.kth_name} belum punya nomor rekening — lengkapi dulu di data KTH`);
       return;
     }
-    if (duplicate) { toast.error("Ada petani yang muncul dua kali"); return; }
-    if (!filled.length) { toast.error("Isi minimal satu baris petani dengan nominal"); return; }
-    const incomplete = lines.find((l) => (l.farmer_id && !(Number(l.amount) > 0)) || (!l.farmer_id && Number(l.amount) > 0));
-    if (incomplete) { toast.error("Ada baris yang petani atau nominalnya belum lengkap"); return; }
+    if (!filled.length) { toast.error("Isi minimal satu baris penerima dengan nominal"); return; }
+    const incomplete = lines.find(
+      (l) => (l.farmer_name.trim() && !(Number(l.amount) > 0)) || (!l.farmer_name.trim() && Number(l.amount) > 0));
+    if (incomplete) { toast.error("Ada baris yang nama penerima atau nominalnya belum lengkap"); return; }
+    if (missingOwner) { toast.error("Baris labour loan harus menyebut lahan/pinjaman siapa"); return; }
 
     const payload: any = {
       kth_id: Number(kthId),
@@ -140,9 +226,18 @@ export default function ReimbursementCreate() {
       activity_date: activityDate || null,
       estimated_pay_date: estPayDate || null,
       items: filled.map((l) => ({
-        farmer_id: Number(l.farmer_id),
+        farmer_id: l.farmer_id ? Number(l.farmer_id) : null,
+        farmer_name: l.farmer_name.trim(),
+        category: l.category,
+        on_behalf_farmer_id: l.on_behalf_farmer_id ? Number(l.on_behalf_farmer_id) : null,
+        on_behalf_name: l.on_behalf_name.trim() || null,
         description: l.description || null,
+        rate: l.rate === "" ? null : Number(l.rate),
+        work_days: l.work_days === "" ? null : Number(l.work_days),
+        work_dates: l.work_dates || null,
         amount: Number(l.amount),
+        recipient_bank_name: l.recipient_bank_name || null,
+        recipient_bank_account: l.recipient_bank_account || null,
       })),
       ...(status === "keep" ? {} : { status }),
     };
@@ -234,7 +329,7 @@ export default function ReimbursementCreate() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
-              Petani yang Dibayar
+              Rincian Penerima
             </h2>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={addAllFarmers} disabled={!kthId}>
@@ -247,36 +342,97 @@ export default function ReimbursementCreate() {
           </div>
 
           {!kthId && (
-            <p className="text-sm text-slate-400 py-6 text-center">Pilih KTH dulu untuk memilih petaninya.</p>
+            <p className="text-sm text-slate-400 py-6 text-center">Pilih KTH dulu untuk mengisi rinciannya.</p>
           )}
 
           {kthId && (
             <>
-              <div className="space-y-2">
+              {/* Suggestions, not a closed list. Most people on these documents are
+                  daily workers who are in no master list at all; typing a name that
+                  matches one of the KTH's farmers links the line to them, and
+                  anything else is recorded as typed. */}
+              <datalist id="reimb-farmers">
+                {(farmers || []).map((f) => <option key={f.id} value={f.farmer_name} />)}
+              </datalist>
+
+              <div className="space-y-3">
                 {lines.map((l, i) => {
-                  const dupe = !!l.farmer_id && usedFarmers.filter((f) => f === l.farmer_id).length > 1;
+                  const loan = l.category !== "DailyWorker";
+                  const ownerMissing = loan && Number(l.amount) > 0 && !l.on_behalf_name.trim();
                   return (
-                    <div key={l.key} className="flex items-start gap-2">
-                      <span className="w-6 text-xs text-slate-300 pt-2.5 text-right shrink-0">{i + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <select value={l.farmer_id} onChange={(e) => setLine(l.key, { farmer_id: e.target.value })}
-                          className={`${selectCls} ${dupe ? "border-red-300 bg-red-50" : ""}`}>
-                          <option value="">— pilih petani —</option>
-                          {(farmers || []).map((f) => (
-                            <option key={f.id} value={f.id}>{f.farmer_name}</option>
-                          ))}
-                        </select>
-                        {dupe && <p className="text-[11px] text-red-600 mt-0.5">Petani ini sudah ada di baris lain.</p>}
+                    <div key={l.key} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-6 text-xs text-slate-300 text-right shrink-0">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <label className="text-[11px] text-slate-400 block mb-0.5">Penerima <span className="text-red-500">*</span></label>
+                          <Input list="reimb-farmers" value={l.farmer_name}
+                            onChange={(e) => setName(l.key, "farmer", e.target.value)}
+                            placeholder="Nama penerima (mis. Tenggo)" />
+                        </div>
+                        <div className="w-56 shrink-0">
+                          <label className="text-[11px] text-slate-400 block mb-0.5">Kategori</label>
+                          <select value={l.category} onChange={(e) => setLine(l.key, { category: e.target.value as Category })}
+                            className={selectCls}>
+                            {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => (
+                              <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-56 shrink-0">
+                          <label className="text-[11px] text-slate-400 block mb-0.5">
+                            Lahan/pinjaman siapa {loan && <span className="text-red-500">*</span>}
+                          </label>
+                          <Input list="reimb-farmers" value={l.on_behalf_name} disabled={!loan}
+                            onChange={(e) => setName(l.key, "on_behalf", e.target.value)}
+                            className={ownerMissing ? "border-red-300 bg-red-50" : ""}
+                            placeholder={loan ? "mis. Mustari" : "—"} />
+                        </div>
+                        <button onClick={() => removeLine(l.key)}
+                          className="p-2 mt-4 text-slate-300 hover:text-red-600 shrink-0" title="Hapus baris">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                      <Input className="flex-1 min-w-0" value={l.description}
-                        onChange={(e) => setLine(l.key, { description: e.target.value })}
-                        placeholder="Untuk apa (mis. panen 12–18 Agu)" />
-                      <Input className="w-40 shrink-0 text-right" type="number" value={l.amount}
-                        onChange={(e) => setLine(l.key, { amount: e.target.value })} placeholder="0" />
-                      <button onClick={() => removeLine(l.key)}
-                        className="p-2 text-slate-300 hover:text-red-600 shrink-0" title="Hapus baris">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+
+                      <div className="flex items-end gap-2 pl-8">
+                        <div className="flex-1 min-w-0">
+                          <label className="text-[11px] text-slate-400 block mb-0.5">Keterangan</label>
+                          <Input value={l.description}
+                            onChange={(e) => setLine(l.key, { description: e.target.value })}
+                            placeholder="mis. Land maintenance" />
+                        </div>
+                        <div className="w-28 shrink-0">
+                          <label className="text-[11px] text-slate-400 block mb-0.5">Rate</label>
+                          <Input type="number" className="text-right" value={l.rate}
+                            onChange={(e) => setLine(l.key, { rate: e.target.value })} placeholder="0" />
+                        </div>
+                        <div className="w-20 shrink-0">
+                          <label className="text-[11px] text-slate-400 block mb-0.5">Hari</label>
+                          <Input type="number" className="text-right" value={l.work_days}
+                            onChange={(e) => setLine(l.key, { work_days: e.target.value })} placeholder="0" />
+                        </div>
+                        <div className="w-48 shrink-0">
+                          <label className="text-[11px] text-slate-400 block mb-0.5">Tanggal kerja</label>
+                          <Input value={l.work_dates}
+                            onChange={(e) => setLine(l.key, { work_dates: e.target.value })}
+                            placeholder="06, 07, 10 Agustus" />
+                        </div>
+                        <div className="w-40 shrink-0">
+                          <label className="text-[11px] text-slate-400 block mb-0.5">Nominal <span className="text-red-500">*</span></label>
+                          <Input type="number" className="text-right" value={l.amount}
+                            onChange={(e) => setLine(l.key, { amount: e.target.value })} placeholder="0" />
+                        </div>
+                      </div>
+
+                      {/* Rate x hari is a description of how the amount was reached,
+                          not a formula: the real sheets carry weeks where one of four
+                          days was paid at half rate. Flagged, never corrected. */}
+                      {Number(l.rate) > 0 && Number(l.work_days) > 0
+                        && Number(l.rate) * Number(l.work_days) !== Number(l.amount) && Number(l.amount) > 0 && (
+                        <p className="text-[11px] text-amber-600 mt-1.5 pl-8">
+                          Rate × hari = {fmtRp(Number(l.rate) * Number(l.work_days))}, beda dengan nominal.
+                          Tidak apa-apa bila memang ada hari yang dibayar berbeda — nominal yang dipakai.
+                        </p>
+                      )}
                     </div>
                   );
                 })}
@@ -284,10 +440,52 @@ export default function ReimbursementCreate() {
 
               <div className="mt-4 flex items-center justify-between px-4 py-3 rounded-xl bg-slate-900 text-white">
                 <span className="text-sm font-medium">
-                  Total transfer · {filled.length} petani
+                  Total transfer · {filled.length} baris · {recap.recipient.length} penerima
                 </span>
                 <span className="text-lg font-bold font-mono">{fmtRp(total)}</span>
               </div>
+
+              {/* The two recaps the paper form prints, live. They are what a reader
+                  checks against each other first, so the person filling this in
+                  should see them before anybody else has to. */}
+              {filled.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <p className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      Rekap per skema
+                    </p>
+                    <ul className="divide-y divide-slate-50">
+                      {recap.scheme.map((g) => (
+                        <li key={g.label} className="flex items-center justify-between px-3 py-2 text-sm">
+                          <span className="text-slate-600 pr-3">{g.label}</span>
+                          <span className="font-mono text-slate-800 whitespace-nowrap">{fmtRp(g.amount)}</span>
+                        </li>
+                      ))}
+                      <li className="flex items-center justify-between px-3 py-2 text-sm bg-slate-50 font-semibold">
+                        <span className="text-slate-700">Total</span>
+                        <span className="font-mono text-slate-900">{fmtRp(total)}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <p className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      Rekap per penerima
+                    </p>
+                    <ul className="divide-y divide-slate-50">
+                      {recap.recipient.map((r) => (
+                        <li key={r.name} className="flex items-center justify-between px-3 py-2 text-sm">
+                          <span className="text-slate-600 pr-3">{r.name}</span>
+                          <span className="font-mono text-slate-800 whitespace-nowrap">{fmtRp(r.amount)}</span>
+                        </li>
+                      ))}
+                      <li className="flex items-center justify-between px-3 py-2 text-sm bg-slate-50 font-semibold">
+                        <span className="text-slate-700">Total</span>
+                        <span className="font-mono text-slate-900">{fmtRp(total)}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              )}
               <p className="text-[11px] text-slate-400 mt-2">
                 Nominal dokumen dihitung dari daftar ini, tidak bisa diketik terpisah — angka di
                 rekening koran nanti harus sama persis dengan jumlah baris di atas.

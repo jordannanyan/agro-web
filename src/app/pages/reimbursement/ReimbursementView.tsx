@@ -27,9 +27,27 @@ import { DocumentActions, RevisionBanner } from "../../components/DocumentAction
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
+const CATEGORY_LABEL: Record<string, string> = {
+  DailyWorker: "Daily worker",
+  LabourLoanPreFinance: "Labour loan — pre finance",
+  LabourLoanProfitSharing: "Labour loan — profit sharing",
+};
+
 interface Item {
   id: number; farmer_id: number | null; farmer_name: string;
-  description: string | null; amount: number; no_hp: string | null; no_rek: string | null;
+  category: string | null;
+  on_behalf_farmer_id: number | null; on_behalf_name: string | null;
+  description: string | null;
+  rate: number | null; work_days: number | null; work_dates: string | null;
+  amount: number; no_hp: string | null; no_rek: string | null;
+  recipient_bank_name: string | null; recipient_bank_account: string | null;
+}
+
+/** The two recaps the paper form prints, computed by the API from the same lines. */
+interface Recap {
+  total: number;
+  by_scheme: { label: string; category: string; on_behalf_name: string | null; amount: number; lines: number }[];
+  by_recipient: { farmer_id: number | null; farmer_name: string; bank_name: string | null; bank_account: string | null; amount: number; lines: number }[];
 }
 
 interface Detail {
@@ -44,6 +62,7 @@ interface Detail {
   payment_code: string | null;
   approvals: ApprovalStep[];
   items: Item[];
+  recap?: Recap;
 }
 
 function statusStyle(status: string) {
@@ -141,16 +160,23 @@ export default function ReimbursementView() {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-slate-900 font-semibold flex items-center gap-2">
-                  <Users className="w-4 h-4 text-slate-400" />Petani yang Dibayar
+                  <Users className="w-4 h-4 text-slate-400" />Rincian Penerima
                 </h2>
-                <span className="text-xs text-slate-400">{data.items?.length || 0} orang</span>
+                <span className="text-xs text-slate-400">
+                  {data.items?.length || 0} baris · {data.recap?.by_recipient?.length || 0} penerima
+                </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
-                      <th className="py-2 font-medium">Petani</th>
+                      <th className="py-2 font-medium">Penerima</th>
+                      <th className="py-2 font-medium">Kategori</th>
+                      <th className="py-2 font-medium">Lahan/pinjaman</th>
                       <th className="py-2 font-medium">Keterangan</th>
+                      <th className="py-2 font-medium text-right">Rate</th>
+                      <th className="py-2 font-medium text-right">Hari</th>
+                      <th className="py-2 font-medium">Tanggal</th>
                       <th className="py-2 font-medium text-right">Nominal</th>
                     </tr>
                   </thead>
@@ -158,22 +184,81 @@ export default function ReimbursementView() {
                     {(data.items || []).map((it) => (
                       <tr key={it.id} className="border-b border-slate-50">
                         <td className="py-2.5">
-                          <p className="text-slate-800 font-medium">{it.farmer_name}</p>
-                          {it.no_rek && <p className="text-xs text-slate-400 font-mono">{it.no_rek}</p>}
+                          <p className="text-slate-800 font-medium whitespace-nowrap">{it.farmer_name}</p>
+                          {(it.recipient_bank_account || it.no_rek) && (
+                            <p className="text-xs text-slate-400 font-mono">
+                              {it.recipient_bank_name ? `${it.recipient_bank_name} ` : ""}
+                              {it.recipient_bank_account || it.no_rek}
+                            </p>
+                          )}
                         </td>
+                        <td className="py-2.5 text-slate-600 whitespace-nowrap">
+                          {CATEGORY_LABEL[it.category || "DailyWorker"] || it.category}
+                        </td>
+                        <td className="py-2.5 text-slate-600 whitespace-nowrap">{it.on_behalf_name || "—"}</td>
                         <td className="py-2.5 text-slate-600">{it.description || "—"}</td>
-                        <td className="py-2.5 text-right font-mono text-slate-900">{fmtRp(it.amount)}</td>
+                        <td className="py-2.5 text-right font-mono text-slate-500 whitespace-nowrap">
+                          {it.rate != null ? fmtRp(it.rate) : "—"}
+                        </td>
+                        <td className="py-2.5 text-right font-mono text-slate-500">{it.work_days ?? "—"}</td>
+                        <td className="py-2.5 text-slate-500 text-xs">{it.work_dates || "—"}</td>
+                        <td className="py-2.5 text-right font-mono text-slate-900 whitespace-nowrap">{fmtRp(it.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td colSpan={2} className="py-3 text-sm font-semibold text-slate-700">Jumlah</td>
+                      <td colSpan={7} className="py-3 text-sm font-semibold text-slate-700">Jumlah</td>
                       <td className="py-3 text-right font-mono font-bold text-slate-900">{fmtRp(data.items_total)}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
+              {/* The same total read two ways, as the paper form prints it. A reader
+                  checks them against each other before anything else, so they sit
+                  together under the lines they come from. */}
+              {data.recap && (data.recap.by_scheme?.length || 0) > 0 && (
+                <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <p className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      Rekap per skema
+                    </p>
+                    <ul className="divide-y divide-slate-50">
+                      {data.recap.by_scheme.map((g) => (
+                        <li key={g.label} className="flex items-center justify-between px-3 py-2 text-sm">
+                          <span className="text-slate-600 pr-3">{g.label}</span>
+                          <span className="font-mono text-slate-800 whitespace-nowrap">{fmtRp(g.amount)}</span>
+                        </li>
+                      ))}
+                      <li className="flex items-center justify-between px-3 py-2 text-sm bg-slate-50 font-semibold">
+                        <span className="text-slate-700">Total</span>
+                        <span className="font-mono text-slate-900">{fmtRp(data.recap.total)}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <p className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      Rekap per penerima
+                    </p>
+                    <ul className="divide-y divide-slate-50">
+                      {data.recap.by_recipient.map((r) => (
+                        <li key={`${r.farmer_id ?? ""}${r.farmer_name}`} className="flex items-center justify-between px-3 py-2 text-sm">
+                          <span className="text-slate-600 pr-3">
+                            {r.farmer_name}
+                            {r.bank_account && <span className="block text-[11px] text-slate-400 font-mono">{r.bank_name ? `${r.bank_name} ` : ""}{r.bank_account}</span>}
+                          </span>
+                          <span className="font-mono text-slate-800 whitespace-nowrap">{fmtRp(r.amount)}</span>
+                        </li>
+                      ))}
+                      <li className="flex items-center justify-between px-3 py-2 text-sm bg-slate-50 font-semibold">
+                        <span className="text-slate-700">Total</span>
+                        <span className="font-mono text-slate-900">{fmtRp(data.recap.total)}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+
               {/* Kalau ini pernah muncul, ada yang salah di luar formulir — nominal
                   dokumen selalu dihitung dari baris-baris di atas. */}
               {Number(data.items_total) !== Number(data.amount) && (
