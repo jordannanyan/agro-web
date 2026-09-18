@@ -50,7 +50,7 @@ function stepHeading(step: ApprovalStep, all: ApprovalStep[]): string {
 export function ApprovalTimeline({
   docType, docId, steps, onChanged,
 }: {
-  docType: "PR" | "PO" | "PayReq" | "Reimbursement";
+  docType: "PR" | "PO" | "PayReq" | "Reimbursement" | "Expense";
   docId: number;
   steps: ApprovalStep[];
   onChanged: () => void;

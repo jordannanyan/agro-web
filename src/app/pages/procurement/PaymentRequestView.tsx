@@ -27,6 +27,9 @@ interface PayDetail {
   payment_code: string | null;
   payment_code_issued_at: string | null;
   bank_name: string | null; bank_account: string | null; beneficiary_name: string | null;
+  /** 'Expense' is a claim for money somebody spent themselves — no PR, no PO. */
+  payreq_kind?: "Procurement" | "Reimbursement" | "Expense";
+  items?: { id: number; description: string; amount: number }[];
   /** From the `banks` master, via `bank_id` — the BIC a Kopra transfer file carries. */
   bank_code: string | null; bank_list_name: string | null;
   approvals: ApprovalStep[];
@@ -121,7 +124,13 @@ export default function PaymentRequestView() {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Informasi</h2>
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${data.route === "via_po" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>{data.route === "via_po" ? "dari PO" : "dari PR"}</span>
+                {data.payreq_kind === "Expense" ? (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200">
+                    ganti biaya · tanpa PR/PO
+                  </span>
+                ) : (
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${data.route === "via_po" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>{data.route === "via_po" ? "dari PO" : "dari PR"}</span>
+                )}
               </div>
               <div className="grid grid-cols-4 gap-4">
                 {[
@@ -198,15 +207,51 @@ export default function PaymentRequestView() {
             </Card>
 
             {/* An approver signing off cash should be able to see the goods without
-                leaving the page. */}
-            <SourceDocumentPreview
-              docType={data.purchase_order_id ? "PO" : "PR"}
-              docId={data.purchase_order_id || data.purchase_request_id}
-            />
+                leaving the page. An expense claim has no source document — what it is
+                made of is the list of lines below instead. */}
+            {data.payreq_kind === "Expense" ? (
+              <Card className="p-6">
+                <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">
+                  Rincian Pengeluaran
+                </h2>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
+                      <th className="py-2 font-medium">Keterangan</th>
+                      <th className="py-2 font-medium text-right">Nominal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.items || []).map((it) => (
+                      <tr key={it.id} className="border-b border-slate-50">
+                        <td className="py-2.5 text-slate-700">{it.description}</td>
+                        <td className="py-2.5 text-right font-mono text-slate-900">{fmtRp(it.amount)}</td>
+                      </tr>
+                    ))}
+                    {!(data.items || []).length && (
+                      <tr><td colSpan={2} className="py-4 text-sm text-slate-400">Tidak ada rincian.</td></tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td className="py-3 text-sm font-semibold text-slate-700">Jumlah</td>
+                      <td className="py-3 text-right font-mono font-bold text-slate-900">
+                        {fmtRp((data.items || []).reduce((t, i) => t + Number(i.amount || 0), 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </Card>
+            ) : (
+              <SourceDocumentPreview
+                docType={data.purchase_order_id ? "PO" : "PR"}
+                docId={data.purchase_order_id || data.purchase_request_id}
+              />
+            )}
 
             <Card className="p-6">
               <h2 className="text-slate-900 font-semibold mb-4">Alur Approval</h2>
-              <ApprovalTimeline docType="PayReq" docId={data.id} steps={data.approvals || []} onChanged={refetch} />
+              <ApprovalTimeline docType={data.payreq_kind === "Expense" ? "Expense" : "PayReq"} docId={data.id} steps={data.approvals || []} onChanged={refetch} />
             </Card>
 
             {/* Payment execution — step 5. Deliberately outside the approval timeline:
@@ -320,7 +365,7 @@ export default function PaymentRequestView() {
             )}
 
             <Card className="p-6">
-              <DocumentAttachments docType="PayReq" docId={data.id} categories={["Bukti Bayar", "Invoice", "ToR / Estimasi", "Lainnya"]} />
+              <DocumentAttachments docType={data.payreq_kind === "Expense" ? "Expense" : "PayReq"} docId={data.id} categories={["Bukti Bayar", "Invoice", "ToR / Estimasi", "Lainnya"]} />
             </Card>
           </>
         )}

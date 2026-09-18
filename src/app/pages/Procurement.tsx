@@ -18,7 +18,7 @@ const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface PRRow extends PendingInfo { id: number; pr_number: string; entity_id: number | null; entity_name: string; request_date: string; date_required: string | null; status: string; grand_total: number; requested_by_name: string | null; }
 interface PORow extends PendingInfo { id: number; po_number: string; entity_id: number | null; entity_name: string; pr_number: string | null; vendor_name: string; status: string; order_date: string; }
-interface PayRow extends PendingInfo { id: number; payreq_number: string; payment_code: string | null; entity_id: number | null; entity_name: string; pr_number: string | null; po_number: string | null; route: string; amount: number; estimated_pay_date: string | null; status: string; }
+interface PayRow extends PendingInfo { id: number; payreq_number: string; payment_code: string | null; entity_id: number | null; entity_name: string; pr_number: string | null; po_number: string | null; route: string; amount: number; estimated_pay_date: string | null; status: string; payreq_kind?: string; }
 
 // A row awaiting the viewer is tinted across its whole width — the badge alone is
 // easy to miss when a table runs long. Revisions get their own tint: they are the
@@ -247,6 +247,11 @@ export default function Procurement() {
                     <tr key={pay.id} className={`border-b border-slate-50 ${rowClass(pay, "PayReq", user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-amber-700">
                         {pay.payreq_number}
+                        {pay.payreq_kind === "Expense" && (
+                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded border border-violet-200 bg-violet-50 text-violet-700 text-[10px] font-semibold uppercase tracking-wide">
+                            ganti biaya
+                          </span>
+                        )}
                         {/* The reference the transfer has to quote. Shown in the list
                             because finance works from this screen when paying a batch,
                             and opening every request to read one code is how codes get

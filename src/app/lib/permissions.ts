@@ -56,13 +56,16 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   // once the chain is signed off. They cannot approve — that is enforced by the API
   // and by canApprove() below.
   //
-  // Field Admin is deliberately absent. They were added here on 2026-09-18 and taken
-  // out again the same week: the payment requests they file are reimbursements, which
-  // descend from no purchase and live on their own path under /reimbursement. A
-  // procurement payment request always settles a PR or a PO, and a Field Admin raises
-  // neither — putting the menu in front of them only offered a form they cannot fill.
-  { prefix: "/procurement/payment-request",  roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
-  { prefix: "/procurement/payreq",           roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
+  // Field Admin belongs here after all, for one of the two documents this screen
+  // holds: the expense claim, which pays back money they spent themselves and has no
+  // PR or PO behind it. They still cannot file a procurement payment request — the
+  // API refuses that by role — but the screen is where they ask for their money back.
+  //
+  // (Not to be confused with Reimbursement Petani, the other source-less kind. That
+  // one reaches a farmer through a KTH; this one reaches the member of staff who is
+  // out of pocket.)
+  { prefix: "/procurement/payment-request",  roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF, ROLE.FIELD_ADMIN] },
+  { prefix: "/procurement/payreq",           roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF, ROLE.FIELD_ADMIN] },
   // Reconciliation is the payment desk: the people who transfer the money and hold
   // the statement, nobody else.
   { prefix: "/procurement/reconciliation",   roles: [ROLE.FINANCE_MANAGER, ROLE.FINANCE_STAFF] },
@@ -164,7 +167,7 @@ export function canOverridePayment(roleCode: string | null | undefined): boolean
 // exactly the same rule; these helpers only decide what to put on screen.
 // -----------------------------------------------------------------------------
 
-export type DocType = "PR" | "PO" | "PayReq" | "Reimbursement";
+export type DocType = "PR" | "PO" | "PayReq" | "Reimbursement" | "Expense";
 
 export const EDITABLE_STATUSES = ["Draft", "Revision"];
 
@@ -172,11 +175,13 @@ export const EDITABLE_STATUSES = ["Draft", "Revision"];
 const WRITERS: Record<DocType, Role[]> = {
   PR: [ROLE.FIELD_ADMIN, ROLE.PROJECT_MANAGER, ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
   PO: [ROLE.PROCUREMENT, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
-  // Field Admin raises reimbursements, not procurement payment requests — see the
-  // route table above and `Reimbursement` below, where they are a writer.
-  PayReq: [ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
+  // Field Admin raises the expense-claim kind only; the API enforces which, this
+  // list only decides whether the New button appears at all.
+  PayReq: [ROLE.FIELD_ADMIN, ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
   // Nothing is procured on a reimbursement, so Procurement does not raise it.
   Reimbursement: [ROLE.FIELD_ADMIN, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.SUPER_ADMIN],
+  // An expense claim: whoever spent their own money asks for it back.
+  Expense: [ROLE.FIELD_ADMIN, ROLE.PROCUREMENT, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
 };
 
 /** Who files each kind of document when the chain has not been seeded yet. */
@@ -185,6 +190,7 @@ const DEFAULT_REQUESTER: Record<DocType, Role> = {
   PO: ROLE.PROCUREMENT,
   PayReq: ROLE.PROCUREMENT,
   Reimbursement: ROLE.FIELD_ADMIN,
+  Expense: ROLE.FIELD_ADMIN,
 };
 
 export interface StepLike {

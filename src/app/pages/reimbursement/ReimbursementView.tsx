@@ -100,9 +100,9 @@ export default function ReimbursementView() {
             </div>
             <div>
               <h1 className="text-slate-900 font-semibold text-lg font-mono">
-                {data?.payreq_number || "Payment Request"}
+                {data?.payreq_number || "Reimbursement"}
               </h1>
-              <p className="text-slate-500 text-sm">Upah tenaga kerja kebun · dibayar lewat rekening KTH</p>
+              <p className="text-slate-500 text-sm">Membayar petani lewat rekening KTH</p>
             </div>
           </div>
           {data && (

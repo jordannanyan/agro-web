@@ -100,11 +100,10 @@ const menuItems = [
   // Bukan bagian Procurement: tidak ada yang dibeli, dan yang mengajukannya Field
   // Admin — orang yang tidak boleh masuk ke menu Procurement sama sekali.
   //
-  // Namanya tetap "Payment Request" karena begitulah formulir kertasnya berjudul dan
-  // begitu pula orang-orangnya menyebutnya; "Lapangan" yang membedakannya dari
-  // Payment Request procurement di menu sebelah. Rutenya tetap /reimbursement —
-  // tautan di notifikasi yang sudah tersimpan mengarah ke sana.
-  { id: "reimbursement", icon: HandCoins, label: "Payment Request Lapangan", path: "/reimbursement" },
+  // Namanya "Reimbursement Petani" dan bukan "Payment Request": ini membayar PETANI
+  // lewat rekening KTH. Yang mengganti uang Field Admin sendiri adalah Payment
+  // Request di menu Procurement — dua hal berbeda yang sempat tertukar 18 Sep.
+  { id: "reimbursement", icon: HandCoins, label: "Reimbursement Petani", path: "/reimbursement" },
   { id: "map", icon: MapIcon, label: "Map Monitoring", path: "/map" },
   { id: "reports", icon: FileText, label: "Laporan", path: "/reports" },
   { id: "settings", icon: Settings, label: "Settings", path: "/settings" },

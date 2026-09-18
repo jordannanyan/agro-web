@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, CreditCard, Save, Send, RotateCcw } from "lucide-react";
+import { ArrowLeft, CreditCard, Save, Send, RotateCcw, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -26,7 +26,18 @@ export default function PaymentRequestCreate() {
   // *code*, and "BCA" / "bca" / "Bank BCA" are not one.
   const { data: banks } = useApi<BankOption[]>("banks", { is_active: 1 });
 
-  const [sourceType, setSourceType] = useState<"PO" | "PR">("PO");
+  /**
+   * Three ways a payment request comes about.
+   *
+   * "Expense" is the one with no purchase behind it: somebody spent their own money
+   * and is asking for it back. It is not the KTH reimbursement — that pays farmers
+   * and has its own screen; this reaches the member of staff who is out of pocket.
+   */
+  const [sourceType, setSourceType] = useState<"PO" | "PR" | "Expense">("PO");
+  const isExpense = sourceType === "Expense";
+  const [claimLines, setClaimLines] = useState<{ key: string; description: string; amount: string }[]>(
+    [{ key: Math.random().toString(36).slice(2), description: "", amount: "" }]);
+  const claimTotal = claimLines.reduce((t, l) => t + (Number(l.amount) || 0), 0);
   const [prId, setPrId] = useState("");
   const [poId, setPoId] = useState("");
   // Both pickers drop the documents a payment has already been raised against, so
@@ -80,8 +91,13 @@ export default function PaymentRequestCreate() {
       try {
         const p = await api.get<any>(`payment-requests/${id}`);
         setDocStatus(p.status ?? null);
-        const src = p.purchase_order_id ? "PO" : "PR";
+        const src = p.payreq_kind === "Expense" ? "Expense" : p.purchase_order_id ? "PO" : "PR";
         setSourceType(src as any);
+        if (p.payreq_kind === "Expense" && Array.isArray(p.items)) {
+          setClaimLines(p.items.length
+            ? p.items.map((it: any) => ({ key: `i${it.id}`, description: it.description ?? "", amount: String(it.amount ?? "") }))
+            : [{ key: Math.random().toString(36).slice(2), description: "", amount: "" }]);
+        }
         setPrId(p.purchase_request_id ? String(p.purchase_request_id) : "");
         setPoId(p.purchase_order_id ? String(p.purchase_order_id) : "");
         setBudgetCodeId(p.budget_code_id ? String(p.budget_code_id) : "");
@@ -120,6 +136,14 @@ export default function PaymentRequestCreate() {
     if (grandTotal > 0 && !(Number(amount) > 0)) setAmount(String(grandTotal));
   }
 
+  // On an expense claim the amount is the sum of its lines and is never typed —
+  // the same rule the KTH reimbursement follows: a payment whose total disagrees
+  // with its own breakdown is one nobody can check.
+  useEffect(() => {
+    if (isExpense) setAmount(claimTotal ? String(claimTotal) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExpense, claimTotal]);
+
   // Changing the source clears a suggestion the user has not touched, so the old
   // document's total cannot be carried onto the new one unnoticed.
   useEffect(() => {
@@ -142,9 +166,16 @@ export default function PaymentRequestCreate() {
   async function submit(status: "Draft" | "Pending" | "keep") {
     if (sourceType === "PR" && !prId) { toast.error("Pilih PR sumber"); return; }
     if (sourceType === "PO" && !poId) { toast.error("Pilih PO sumber"); return; }
+    const filledClaims = claimLines.filter((l) => l.description.trim() && Number(l.amount) > 0);
+    if (isExpense) {
+      if (!filledClaims.length) { toast.error("Isi minimal satu baris pengeluaran"); return; }
+      const half = claimLines.find((l) => (l.description.trim() ? 0 : 1) !== (Number(l.amount) > 0 ? 0 : 1));
+      if (half) { toast.error("Ada baris yang keterangan atau nominalnya belum lengkap"); return; }
+      if (!budgetCodeId) { toast.error("Project Code wajib diisi"); return; }
+    }
     // The server inherits from the source when nothing is sent, so this only
     // catches the case where neither has a code.
-    if (!budgetCodeId && srcBudget.id == null) { toast.error("Project Code wajib diisi - dokumen sumber belum punya budget code"); return; }
+    if (!isExpense && !budgetCodeId && srcBudget.id == null) { toast.error("Project Code wajib diisi - dokumen sumber belum punya budget code"); return; }
     if (!(Number(amount) > 0)) { toast.error("Nominal harus > 0"); return; }
     // The invoice or receipt is the point of a payment request; the API refuses one
     // that enters the chain without it.
@@ -153,6 +184,8 @@ export default function PaymentRequestCreate() {
       return;
     }
     const payload: any = {
+      payreq_kind: isExpense ? "Expense" : "Procurement",
+      ...(isExpense ? { items: filledClaims.map((l) => ({ description: l.description.trim(), amount: Number(l.amount) })) } : {}),
       purchase_request_id: sourceType === "PR" ? Number(prId) : null,
       purchase_order_id: sourceType === "PO" ? Number(poId) : null,
       budget_code_id: budgetCodeId ? Number(budgetCodeId) : null,
@@ -207,14 +240,25 @@ export default function PaymentRequestCreate() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Sumber Dokumen</h2>
           <div className="flex gap-2 mb-4">
-            {(["PO", "PR"] as const).map((t) => (
+            {(["PO", "PR", "Expense"] as const).map((t) => (
               <label key={t} className={`flex-1 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border cursor-pointer transition-colors ${sourceType === t ? "border-emerald-300 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}>
                 <input type="radio" checked={sourceType === t} onChange={() => setSourceType(t)} className="accent-emerald-500" />
-                <span className="text-sm font-medium">{t === "PO" ? "Dari PO (Route B)" : "Langsung dari PR (Route A)"}</span>
+                <span className="text-sm font-medium">
+                  {t === "PO" ? "Dari PO (Route B)" : t === "PR" ? "Langsung dari PR (Route A)" : "Tanpa PR/PO — ganti biaya"}
+                </span>
               </label>
             ))}
           </div>
-          {sourceType === "PR" ? (
+          {isExpense && (
+            <p className="text-xs text-slate-500 mb-3 -mt-1">
+              Untuk mengganti uang yang sudah ditalangi sendiri. Tidak ada pembelian di belakangnya, jadi
+              tidak perlu PR atau PO — rinciannya diisi di bawah dan struknya dilampirkan.
+              <span className="block mt-0.5 text-slate-400">
+                Bukan untuk membayar petani; itu lewat menu Reimbursement Petani.
+              </span>
+            </p>
+          )}
+          {isExpense ? null : sourceType === "PR" ? (
             <div>
               <div className="flex items-baseline justify-between gap-2">
                 <label className={label}>Pilih PR <span className="text-red-500">*</span></label>
@@ -238,6 +282,50 @@ export default function PaymentRequestCreate() {
             </div>
           )}
         </div>
+
+        {/* The claim itself. Lines rather than one number for the same reason the KTH
+            reimbursement has them: the total is derived from its parts, so a payment
+            can always be checked against what it is made of. */}
+        {isExpense && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
+                  Rincian Pengeluaran <span className="text-red-500">*</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">Nominal dokumen dihitung dari baris-baris ini.</p>
+              </div>
+              <Button size="sm" variant="outline"
+                onClick={() => setClaimLines((p) => [...p, { key: Math.random().toString(36).slice(2), description: "", amount: "" }])}>
+                <Plus className="w-4 h-4 mr-1.5" />Baris
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {claimLines.map((l, i) => (
+                <div key={l.key} className="flex items-center gap-2">
+                  <span className="w-6 text-xs text-slate-300 text-right shrink-0">{i + 1}</span>
+                  <Input className="flex-1 min-w-0" value={l.description}
+                    onChange={(e) => setClaimLines((p) => p.map((x) => (x.key === l.key ? { ...x, description: e.target.value } : x)))}
+                    placeholder="Untuk apa (mis. BBM perjalanan ke kebun)" />
+                  <Input className="w-44 shrink-0 text-right" type="number" value={l.amount}
+                    onChange={(e) => setClaimLines((p) => p.map((x) => (x.key === l.key ? { ...x, amount: e.target.value } : x)))}
+                    placeholder="0" />
+                  <button
+                    onClick={() => setClaimLines((p) => (p.length === 1
+                      ? [{ key: Math.random().toString(36).slice(2), description: "", amount: "" }]
+                      : p.filter((x) => x.key !== l.key)))}
+                    className="p-2 text-slate-300 hover:text-red-600 shrink-0" title="Hapus baris">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center justify-between px-4 py-3 rounded-xl bg-slate-900 text-white">
+              <span className="text-sm font-medium">Total yang diminta</span>
+              <span className="text-lg font-bold font-mono">{fmtRp(claimTotal)}</span>
+            </div>
+          </div>
+        )}
 
         {/* What is being paid for. A payment request used to show only a number and
             an amount, so whoever approved it had to open another screen to learn

@@ -200,7 +200,7 @@ export default function ExecutiveDashboard() {
               {(data?.expenses_by_kind || []).map((e) => (
                 <div key={e.kind} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50">
                   <span className="text-sm text-slate-700">
-                    {e.kind === "Reimbursement" ? "Upah lapangan" : "Procurement"}
+                    {e.kind === "Reimbursement" ? "Reimbursement petani" : "Procurement"}
                     <span className="text-xs text-slate-400"> · {e.count} dok</span>
                   </span>
                   <span className="text-sm font-mono font-semibold text-slate-800">{fmtRp(e.value)}</span>
