@@ -60,6 +60,12 @@ export const router = createBrowserRouter([
       { path: "procurement/po/create",         Component: PurchaseOrderCreate },
       { path: "procurement/po/:id/edit",       Component: PurchaseOrderCreate },
       { path: "procurement/po/:id",            Component: PurchaseOrderView },
+      // The reimbursement claim has its own screens: its own list, and a form that
+      // never asks for a source because it never has one.
+      { path: "procurement/payreq-reimbursement",            Component: Procurement },
+      { path: "procurement/payreq-reimbursement/create",     Component: PaymentRequestCreate },
+      { path: "procurement/payreq-reimbursement/:id/edit",   Component: PaymentRequestCreate },
+      { path: "procurement/payreq-reimbursement/:id",        Component: PaymentRequestView },
       { path: "procurement/payreq/create",     Component: PaymentRequestCreate },
       { path: "procurement/payreq/:id/edit",   Component: PaymentRequestCreate },
       { path: "procurement/payreq/:id",        Component: PaymentRequestView },

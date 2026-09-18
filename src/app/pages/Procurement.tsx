@@ -78,12 +78,23 @@ export default function Procurement() {
 
   const { data: prs, refetch: refetchPR } = useApi<PRRow[]>("purchase-requests", scopeQuery);
   const { data: pos } = useApi<PORow[]>("purchase-orders", scopeQuery);
-  const { data: pays } = useApi<PayRow[]>("payment-requests", scopeQuery);
+  // One list per screen. The claim screen asks for its own kind and nothing else,
+  // so a procurement payment request can never appear on it by accident.
+  const { data: pays } = useApi<PayRow[]>(
+    "payment-requests",
+    location.pathname.includes("/payreq-reimbursement")
+      ? { ...(scopeQuery || {}), kind: "Expense" }
+      : scopeQuery,
+    [location.pathname]);
 
-  type ProcSection = "purchase-request" | "purchase-order" | "payment-request";
+  type ProcSection = "purchase-request" | "purchase-order" | "payment-request" | "payreq-reimbursement";
+  // The reimbursement claim is checked FIRST: its path would otherwise be read as
+  // the procurement one and the page would list the wrong documents.
   const section: ProcSection =
+    location.pathname.includes("/payreq-reimbursement") ? "payreq-reimbursement" :
     location.pathname.includes("/purchase-order") ? "purchase-order" :
     location.pathname.includes("/payment-request") ? "payment-request" : "purchase-request";
+  const isClaim = section === "payreq-reimbursement";
 
   const prList = prs || [], poList = pos || [], payList = pays || [];
   // What the signed-in role is actually holding up, across all three document types.
@@ -230,11 +241,27 @@ export default function Procurement() {
           </Card>
         )}
 
-        {section === "payment-request" && (
+        {/* One table, two screens. Which documents it holds is settled by the route,
+            not by a filter the reader has to notice. */}
+        {(section === "payment-request" || isClaim) && (
           <Card>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div><h2 className="text-slate-900 font-semibold mb-1">Payment Request List</h2><p className="text-sm text-slate-500">Route A: langsung dari PR · Route B: dari PO</p></div>
-              {mayWrite && <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => navigate("/procurement/payreq/create")}><Plus className="w-4 h-4 mr-2" />Create PayReq</Button>}
+              <div>
+                <h2 className="text-slate-900 font-semibold mb-1">
+                  {isClaim ? "Payment Request Reimbursement" : "Payment Request List"}
+                </h2>
+                <p className="text-sm text-slate-500">
+                  {isClaim
+                    ? "Penggantian biaya yang ditalangi sendiri · tanpa PR/PO"
+                    : "Route A: langsung dari PR · Route B: dari PO"}
+                </p>
+              </div>
+              {mayWrite && (
+                <Button className="bg-amber-500 hover:bg-amber-600 text-white"
+                  onClick={() => navigate(isClaim ? "/procurement/payreq-reimbursement/create" : "/procurement/payreq/create")}>
+                  <Plus className="w-4 h-4 mr-2" />{isClaim ? "Buat Reimbursement" : "Create PayReq"}
+                </Button>
+              )}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -247,11 +274,7 @@ export default function Procurement() {
                     <tr key={pay.id} className={`border-b border-slate-50 ${rowClass(pay, "PayReq", user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-amber-700">
                         {pay.payreq_number}
-                        {pay.payreq_kind === "Expense" && (
-                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded border border-violet-200 bg-violet-50 text-violet-700 text-[10px] font-semibold uppercase tracking-wide">
-                            ganti biaya
-                          </span>
-                        )}
+
                         {/* The reference the transfer has to quote. Shown in the list
                             because finance works from this screen when paying a batch,
                             and opening every request to read one code is how codes get
@@ -269,7 +292,7 @@ export default function Procurement() {
                       <td className="py-4 px-6 text-sm text-slate-600">{pay.estimated_pay_date || "—"}</td>
                       <td className="py-4 px-6"><DocumentStatus row={pay} docType="PayReq" /></td>
                       <td className="py-4 px-6"><div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => navigate(`/procurement/payreq/${pay.id}`)}><Eye className="w-4 h-4" /></Button>
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`${isClaim ? "/procurement/payreq-reimbursement" : "/procurement/payreq"}/${pay.id}`)}><Eye className="w-4 h-4" /></Button>
                       </div></td>
                     </tr>
                   ))}

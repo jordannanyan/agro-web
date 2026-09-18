@@ -56,16 +56,18 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   // once the chain is signed off. They cannot approve — that is enforced by the API
   // and by canApprove() below.
   //
-  // Field Admin belongs here after all, for one of the two documents this screen
-  // holds: the expense claim, which pays back money they spent themselves and has no
-  // PR or PO behind it. They still cannot file a procurement payment request — the
-  // API refuses that by role — but the screen is where they ask for their money back.
+  // The reimbursement claim: money a member of staff laid out and is asking back.
+  // Listed BEFORE the procurement payreq prefixes, because the rule table is read in
+  // order and "/procurement/payreq" would otherwise swallow it.
   //
-  // (Not to be confused with Reimbursement Petani, the other source-less kind. That
-  // one reaches a farmer through a KTH; this one reaches the member of staff who is
-  // out of pocket.)
-  { prefix: "/procurement/payment-request",  roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF, ROLE.FIELD_ADMIN] },
-  { prefix: "/procurement/payreq",           roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF, ROLE.FIELD_ADMIN] },
+  // This is the only payment request a Field Admin files. The procurement one below
+  // demands a PR or a PO, which they never raise.
+  //
+  // (Not the same as Reimbursement Petani, the other source-less kind: that one
+  // reaches a farmer through a KTH, this one reaches the person who is out of pocket.)
+  { prefix: "/procurement/payreq-reimbursement", roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF, ROLE.FIELD_ADMIN] },
+  { prefix: "/procurement/payment-request",  roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
+  { prefix: "/procurement/payreq",           roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
   // Reconciliation is the payment desk: the people who transfer the money and hold
   // the statement, nobody else.
   { prefix: "/procurement/reconciliation",   roles: [ROLE.FINANCE_MANAGER, ROLE.FINANCE_STAFF] },

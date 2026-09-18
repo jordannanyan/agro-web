@@ -37,6 +37,11 @@ const menuItems = [
       { id: "proc-pr",    label: "Purchase Request",  path: "/procurement/purchase-request" },
       { id: "proc-po",    label: "Purchase Order",     path: "/procurement/purchase-order" },
       { id: "proc-pay",   label: "Payment Request",    path: "/procurement/payment-request" },
+      // Its own screen, not an option inside the one above. A reimbursement claim
+      // has no purchase behind it and never asks for a PR or a PO, so a form that
+      // offers that choice is a form with a wrong answer on it. It is also the only
+      // payment request a Field Admin files.
+      { id: "proc-payrb", label: "Payment Request Reimbursement", path: "/procurement/payreq-reimbursement" },
       { id: "proc-recon", label: "Rekonsiliasi Pembayaran", path: "/procurement/reconciliation" },
       { id: "proc-vendor",label: "Vendor List",        path: "/procurement/vendor" },
       { id: "proc-stock", label: "Stock List",         path: "/procurement/stock-list" },

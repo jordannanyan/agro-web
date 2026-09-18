@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useLocation } from "react-router";
 import { ArrowLeft, CreditCard, Save, Send, RotateCcw, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
@@ -20,7 +20,18 @@ const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 export default function PaymentRequestCreate() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const location = useLocation();
   const isEdit = !!id;
+  /**
+   * Two documents, one form, decided by the route rather than by a control.
+   *
+   * A reimbursement claim has no purchase behind it and never will, so offering a
+   * "from PR / from PO / neither" choice would be offering an answer that is always
+   * wrong on this screen. The screen it is filed on settles it instead.
+   */
+  const claimMode = location.pathname.includes("/payreq-reimbursement");
+  const backTo = claimMode ? "/procurement/payreq-reimbursement" : "/procurement/payment-request";
+  const viewBase = claimMode ? "/procurement/payreq-reimbursement" : "/procurement/payreq";
   const { data: budgetCodes } = useApi<BudgetCode[]>("budget-codes");
   // The bank has to be picked rather than typed: an export file carries the bank
   // *code*, and "BCA" / "bca" / "Bank BCA" are not one.
@@ -33,7 +44,8 @@ export default function PaymentRequestCreate() {
    * and is asking for it back. It is not the KTH reimbursement — that pays farmers
    * and has its own screen; this reaches the member of staff who is out of pocket.
    */
-  const [sourceType, setSourceType] = useState<"PO" | "PR" | "Expense">("PO");
+  const [sourceType, setSourceType] = useState<"PO" | "PR" | "Expense">(
+    location.pathname.includes("/payreq-reimbursement") ? "Expense" : "PO");
   const isExpense = sourceType === "Expense";
   const [claimLines, setClaimLines] = useState<{ key: string; description: string; amount: string }[]>(
     [{ key: Math.random().toString(36).slice(2), description: "", amount: "" }]);
@@ -212,7 +224,7 @@ export default function PaymentRequestCreate() {
           : status === "keep" ? "Perubahan revisi disimpan"
           : isRevision ? "PayReq dikirim ulang untuk approval"
           : "PayReq diajukan approval");
-      navigate(`/procurement/payreq/${isEdit ? id : res.id}`);
+      navigate(`${viewBase}/${isEdit ? id : res.id}`);
     } catch (e: any) { toast.error(e?.message || "Gagal menyimpan PayReq"); }
     finally { setSaving(false); }
   }
@@ -224,7 +236,7 @@ export default function PaymentRequestCreate() {
     <div className="min-h-screen bg-[#FAFBFC] -mx-8 -my-8">
       <div className="bg-white border-b border-slate-200 px-8 py-5">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate("/procurement/payment-request")} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
+          <button onClick={() => navigate(backTo)} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center"><CreditCard className="w-4 h-4 text-white" /></div>
             <div>
@@ -236,29 +248,33 @@ export default function PaymentRequestCreate() {
       </div>
 
       <div className="px-8 py-6 max-w-3xl mx-auto space-y-6">
-        {/* Source */}
+        {/* Source — procurement only. A reimbursement claim has no source document,
+            so the screen it is filed on says so once instead of asking every time. */}
+        {claimMode ? (
+          <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5">
+            <h2 className="text-sm font-semibold text-violet-900 mb-1">Payment Request Reimbursement</h2>
+            <p className="text-xs text-violet-800/80 leading-relaxed">
+              Untuk mengganti uang yang sudah Anda talangi sendiri. Tidak berasal dari Purchase Request
+              maupun Purchase Order — rinciannya diisi di bawah dan struknya dilampirkan.
+              <span className="block mt-1 text-violet-700/70">
+                Untuk membayar petani lewat KTH, gunakan menu Reimbursement Petani.
+              </span>
+            </p>
+          </div>
+        ) : (
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Sumber Dokumen</h2>
           <div className="flex gap-2 mb-4">
-            {(["PO", "PR", "Expense"] as const).map((t) => (
+            {(["PO", "PR"] as const).map((t) => (
               <label key={t} className={`flex-1 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border cursor-pointer transition-colors ${sourceType === t ? "border-emerald-300 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}>
                 <input type="radio" checked={sourceType === t} onChange={() => setSourceType(t)} className="accent-emerald-500" />
                 <span className="text-sm font-medium">
-                  {t === "PO" ? "Dari PO (Route B)" : t === "PR" ? "Langsung dari PR (Route A)" : "Tanpa PR/PO — ganti biaya"}
+                  {t === "PO" ? "Dari PO (Route B)" : "Langsung dari PR (Route A)"}
                 </span>
               </label>
             ))}
           </div>
-          {isExpense && (
-            <p className="text-xs text-slate-500 mb-3 -mt-1">
-              Untuk mengganti uang yang sudah ditalangi sendiri. Tidak ada pembelian di belakangnya, jadi
-              tidak perlu PR atau PO — rinciannya diisi di bawah dan struknya dilampirkan.
-              <span className="block mt-0.5 text-slate-400">
-                Bukan untuk membayar petani; itu lewat menu Reimbursement Petani.
-              </span>
-            </p>
-          )}
-          {isExpense ? null : sourceType === "PR" ? (
+          {sourceType === "PR" ? (
             <div>
               <div className="flex items-baseline justify-between gap-2">
                 <label className={label}>Pilih PR <span className="text-red-500">*</span></label>
@@ -282,6 +298,7 @@ export default function PaymentRequestCreate() {
             </div>
           )}
         </div>
+        )}
 
         {/* The claim itself. Lines rather than one number for the same reason the KTH
             reimbursement has them: the total is derived from its parts, so a payment
@@ -438,7 +455,7 @@ export default function PaymentRequestCreate() {
         />
 
         <div className="flex items-center justify-between pb-8">
-          <button onClick={() => navigate("/procurement/payment-request")} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>
+          <button onClick={() => navigate(backTo)} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>
           <div className="flex items-center gap-3">
             {isRevision ? (
               <>
