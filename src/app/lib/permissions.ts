@@ -56,11 +56,13 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   // once the chain is signed off. They cannot approve — that is enforced by the API
   // and by canApprove() below.
   //
-  // Field Admin joined on 2026-09-18: they incur the spend in the field and already
-  // file the purchase requests behind it, so routing their payments through head
-  // office cost a day and checked nothing. The approval chain is what checks.
-  { prefix: "/procurement/payment-request",  roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF, ROLE.FIELD_ADMIN] },
-  { prefix: "/procurement/payreq",           roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF, ROLE.FIELD_ADMIN] },
+  // Field Admin is deliberately absent. They were added here on 2026-09-18 and taken
+  // out again the same week: the payment requests they file are reimbursements, which
+  // descend from no purchase and live on their own path under /reimbursement. A
+  // procurement payment request always settles a PR or a PO, and a Field Admin raises
+  // neither — putting the menu in front of them only offered a form they cannot fill.
+  { prefix: "/procurement/payment-request",  roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
+  { prefix: "/procurement/payreq",           roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
   // Reconciliation is the payment desk: the people who transfer the money and hold
   // the statement, nobody else.
   { prefix: "/procurement/reconciliation",   roles: [ROLE.FINANCE_MANAGER, ROLE.FINANCE_STAFF] },
@@ -170,7 +172,9 @@ export const EDITABLE_STATUSES = ["Draft", "Revision"];
 const WRITERS: Record<DocType, Role[]> = {
   PR: [ROLE.FIELD_ADMIN, ROLE.PROJECT_MANAGER, ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
   PO: [ROLE.PROCUREMENT, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
-  PayReq: [ROLE.FIELD_ADMIN, ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
+  // Field Admin raises reimbursements, not procurement payment requests — see the
+  // route table above and `Reimbursement` below, where they are a writer.
+  PayReq: [ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
   // Nothing is procured on a reimbursement, so Procurement does not raise it.
   Reimbursement: [ROLE.FIELD_ADMIN, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.SUPER_ADMIN],
 };
