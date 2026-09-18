@@ -8,13 +8,18 @@ import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 import { ShowUsedSources } from "../../components/ShowUsedSources";
+import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface Vendor { id: number; vendor_name: string; }
 interface BudgetCode { id: number; code: string; }
 interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; status: string; }
-interface POItem { key: string; pr_item_id: number | null; description: string; order_qty: string; unit_price: string; }
+interface POItem {
+  key: string; pr_item_id: number | null; description: string; order_qty: string; unit_price: string;
+  /** Follows the request item this line came from; a request may span several codes. */
+  budget_code_id: string;
+}
 interface Extra { key: string; description: string; amount: string; }
 
 const rid = () => Math.random().toString(36).slice(2);
@@ -48,11 +53,14 @@ export default function PurchaseOrderCreate() {
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
   const [terms, setTerms] = useState("");
-  const [items, setItems] = useState<POItem[]>([{ key: rid(), pr_item_id: null, description: "", order_qty: "", unit_price: "" }]);
+  const [items, setItems] = useState<POItem[]>([{ key: rid(), pr_item_id: null, description: "", order_qty: "", unit_price: "", budget_code_id: "" }]);
   const [extras, setExtras] = useState<Extra[]>([]);
   const [includeTax, setIncludeTax] = useState(false);
   const [taxRate, setTaxRate] = useState("11");
   const [saving, setSaving] = useState(false);
+  // Held until the document exists — see components/RequiredAttachments.
+  const [attachFiles, setAttachFiles] = useState<File[]>([]);
+  const [existingAttachments, setExistingAttachments] = useState(0);
   // See the PR form: a revision keeps its status when saved, and leaves through
   // "resubmit" rather than a first submission.
   const [docStatus, setDocStatus] = useState<string | null>(null);
@@ -76,7 +84,7 @@ export default function PurchaseOrderCreate() {
         setTerms(po.payment_terms ?? "");
         setIncludeTax(!!po.is_tax_included);
         setTaxRate(String(po.tax_rate ?? "11"));
-        if (Array.isArray(po.items)) setItems(po.items.map((it: any) => ({ key: rid(), pr_item_id: it.pr_item_id ?? null, description: it.pr_item_description ?? "Item", order_qty: String(it.order_qty ?? ""), unit_price: String(it.unit_price ?? "") })));
+        if (Array.isArray(po.items)) setItems(po.items.map((it: any) => ({ key: rid(), pr_item_id: it.pr_item_id ?? null, description: it.pr_item_description ?? "Item", order_qty: String(it.order_qty ?? ""), unit_price: String(it.unit_price ?? ""), budget_code_id: it.budget_code_id ? String(it.budget_code_id) : "" })));
         if (Array.isArray(po.extra_costs)) setExtras(po.extra_costs.map((e: any) => ({ key: rid(), description: e.description ?? "", amount: String(e.amount ?? "") })));
       } catch { /* ignore */ }
     })();
@@ -94,6 +102,9 @@ export default function PurchaseOrderCreate() {
           setItems(pr.items.map((it: any) => ({
             key: rid(), pr_item_id: it.id, description: it.description,
             order_qty: String(it.quantity ?? ""), unit_price: String(it.unit_cost ?? ""),
+            // Each line keeps the code its request line carried. A request spanning
+            // two budgets used to collapse into the order's single code here.
+            budget_code_id: it.budget_code_id ? String(it.budget_code_id) : "",
           })));
           // One code for the order, so it can only be taken over when every item
           // of the request agrees on it.
@@ -120,12 +131,23 @@ export default function PurchaseOrderCreate() {
   const upd = (key: string, f: keyof POItem, v: string) => setItems((p) => p.map((it) => (it.key === key ? { ...it, [f]: v } : it)));
   const updExtra = (key: string, f: keyof Extra, v: string) => setExtras((p) => p.map((e) => (e.key === key ? { ...e, [f]: v } : e)));
 
+  useEffect(() => {
+    if (!id) return;
+    api.get<any[]>(`documents/PO/${id}/attachments`)
+      .then((rows) => setExistingAttachments((rows || []).length))
+      .catch(() => undefined);
+  }, [id]);
+
   // "keep" saves without touching the status — see the PR form.
   async function submit(status: "Draft" | "Pending" | "keep") {
     if (!prId) { toast.error("Sumber PR wajib dipilih — entitas PO mengikuti PR"); return; }
     if (!vendorId) { toast.error("Vendor wajib dipilih"); return; }
     const validItems = items.filter((it) => parseFloat(it.order_qty) > 0);
     if (!validItems.length) { toast.error("Tambahkan minimal 1 item"); return; }
+    if (status === "Pending" && !attachFiles.length && !existingAttachments) {
+      toast.error("Lampiran wajib diisi sebelum PO diajukan");
+      return;
+    }
     const payload = {
       vendor_id: Number(vendorId),
       purchase_request_id: Number(prId),
@@ -136,12 +158,24 @@ export default function PurchaseOrderCreate() {
       is_tax_included: includeTax,
       tax_rate: Number(taxRate) || 0,
       ...(status === "keep" ? {} : { status }),
-      items: validItems.map((it) => ({ pr_item_id: it.pr_item_id, order_qty: Number(it.order_qty), unit_price: Number(it.unit_price) || 0 })),
+      items: validItems.map((it) => ({
+        pr_item_id: it.pr_item_id,
+        budget_code_id: it.budget_code_id ? Number(it.budget_code_id) : null,
+        order_qty: Number(it.order_qty),
+        unit_price: Number(it.unit_price) || 0,
+      })),
       extra_costs: extras.filter((e) => e.description || e.amount).map((e) => ({ description: e.description, amount: Number(e.amount) || 0 })),
     };
     setSaving(true);
     try {
-      const res = isEdit ? await api.put<any>(`purchase-orders/${id}`, payload) : await api.post<any>("purchase-orders", payload);
+      // Saved as a Draft first so the files have somewhere to go — see the PR form.
+      const submitting = status === "Pending";
+      const res = isEdit
+        ? await api.put<any>(`purchase-orders/${id}`, { ...payload, ...(submitting ? { status: "Draft" } : {}) })
+        : await api.post<any>("purchase-orders", { ...payload, ...(submitting ? { status: "Draft" } : {}) });
+      const docId = isEdit ? id : res.id;
+      if (attachFiles.length) await uploadPicked("PO", docId!, attachFiles, "Dokumen Pendukung");
+      if (submitting) await api.put(`purchase-orders/${docId}`, { status: "Pending" });
       toast.success(
         status === "Draft" ? "PO disimpan draft"
           : status === "keep" ? "Perubahan revisi disimpan"
@@ -227,11 +261,11 @@ export default function PurchaseOrderCreate() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Item</h2>
-            <Button size="sm" variant="outline" onClick={() => setItems((p) => [...p, { key: rid(), pr_item_id: null, description: "", order_qty: "", unit_price: "" }])}><Plus className="w-4 h-4 mr-1" />Item</Button>
+            <Button size="sm" variant="outline" onClick={() => setItems((p) => [...p, { key: rid(), pr_item_id: null, description: "", order_qty: "", unit_price: "", budget_code_id: "" }])}><Plus className="w-4 h-4 mr-1" />Item</Button>
           </div>
           <table className="w-full">
             <thead><tr className="text-left text-xs text-slate-500 uppercase tracking-wide border-b border-slate-100">
-              <th className="py-2 pr-3 font-semibold">Deskripsi</th><th className="py-2 px-3 font-semibold text-right">Qty</th><th className="py-2 px-3 font-semibold text-right">Harga</th><th className="py-2 px-3 font-semibold text-right">Total</th><th />
+              <th className="py-2 pr-3 font-semibold">Deskripsi</th><th className="py-2 px-3 font-semibold">Budget Code</th><th className="py-2 px-3 font-semibold text-right">Qty</th><th className="py-2 px-3 font-semibold text-right">Harga</th><th className="py-2 px-3 font-semibold text-right">Total</th><th />
             </tr></thead>
             <tbody>
               {items.map((it) => {
@@ -239,6 +273,14 @@ export default function PurchaseOrderCreate() {
                 return (
                   <tr key={it.key} className="border-b border-slate-50">
                     <td className="py-2 pr-3"><Input value={it.description} onChange={(e) => upd(it.key, "description", e.target.value)} placeholder="Deskripsi" /></td>
+                    {/* Per line, not per order: a request may span several budgets and
+                        the order has to carry them through rather than flatten them. */}
+                    <td className="py-2 px-3 w-32">
+                      <select value={it.budget_code_id} onChange={(e) => upd(it.key, "budget_code_id", e.target.value)} className={selectCls}>
+                        <option value="">—</option>
+                        {(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}
+                      </select>
+                    </td>
                     <td className="py-2 px-3 w-28"><Input type="number" className="text-right" value={it.order_qty} onChange={(e) => upd(it.key, "order_qty", e.target.value)} placeholder="0" /></td>
                     <td className="py-2 px-3 w-32"><Input type="number" className="text-right" value={it.unit_price} onChange={(e) => upd(it.key, "unit_price", e.target.value)} placeholder="0" /></td>
                     <td className="py-2 px-3 text-right text-sm font-mono text-slate-700 whitespace-nowrap">{fmtRp(total)}</td>
@@ -278,6 +320,13 @@ export default function PurchaseOrderCreate() {
             <div className="flex justify-between border-t border-slate-200 pt-2"><span className="font-semibold text-slate-800">Grand Total</span><span className="font-mono font-bold text-emerald-700 text-base">{fmtRp(grandTotal)}</span></div>
           </div>
         </div>
+
+        <RequiredAttachments
+          files={attachFiles}
+          setFiles={setAttachFiles}
+          existingCount={existingAttachments}
+          hint="Lampirkan PO bertanda tangan, penawaran vendor, atau dokumen pendukung lain."
+        />
 
         <div className="flex items-center justify-between pb-8">
           <button onClick={() => navigate("/procurement/purchase-order")} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>

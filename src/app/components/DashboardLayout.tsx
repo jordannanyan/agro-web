@@ -25,6 +25,7 @@ import {
 import { useAuth, initials } from "../store/AuthContext";
 import { canAccessPath } from "../lib/permissions";
 import { useInboxCounts, type InboxCounts } from "../lib/inbox";
+import { useNotifications, timeAgo } from "../lib/notifications";
 
 const menuItems = [
   { id: "dashboard", icon: LayoutDashboard, label: "Dashboard", path: "/" },
@@ -160,6 +161,12 @@ export default function DashboardLayout() {
   // Called before the early returns below: the hook order has to stay the same on
   // every render, and `loading` / `user` change between them.
   const inbox = useInboxCounts(!loading && !!user);
+  // Two different questions share this corner of the header. The badge on the bell
+  // counts what has happened and you have not read; the sidebar badges count what is
+  // waiting for you to act. Keeping them apart is why the bell can finally mean
+  // something — before this it was a red dot painted on permanently.
+  const notif = useNotifications(!loading && !!user);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-[#FAFBFC] text-slate-400 text-sm">Memuat…</div>;
@@ -351,21 +358,72 @@ export default function DashboardLayout() {
               <div className="w-px h-7 bg-slate-200 mx-1"></div>
 
               {/* Notifications */}
-              {/* The dot here used to be painted on: always red, whether or not
-                  anything was waiting, so it told nobody anything. It now carries
-                  the same count as the sidebar and disappears at zero. */}
+              {/* The dot here used to be painted on: always red whether or not
+                  anything was waiting, so it told nobody anything. It now counts
+                  unread notifications and disappears at zero. The wrapper is
+                  `relative` so the panel below hangs off the bell rather than off
+                  the header. */}
+              <div className="relative">
               <button
-                onClick={() => navigate("/procurement/purchase-request")}
-                title={inbox.total ? inboxTitle(inbox) : "Tidak ada dokumen yang menunggu Anda"}
+                onClick={() => setNotifOpen((v) => !v)}
+                title={notif.unread ? `${notif.unread} notifikasi belum dibaca` : "Tidak ada notifikasi baru"}
                 className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition-colors border border-slate-200"
               >
                 <Bell className="w-4.5 h-4.5" strokeWidth={2.5} />
-                {inbox.total > 0 && (
+                {notif.unread > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ring-2 ring-white">
-                    {inbox.total > 99 ? "99+" : inbox.total}
+                    {notif.unread > 99 ? "99+" : notif.unread}
                   </span>
                 )}
               </button>
+
+              {notifOpen && (
+                <>
+                  {/* Clicking anywhere else closes it. A panel that only closes by
+                      the button that opened it is a panel people leave open. */}
+                  <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-[26rem] max-w-[calc(100vw-2rem)] z-50 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                      <p className="text-sm font-semibold text-slate-800">Notifikasi</p>
+                      {notif.unread > 0 && (
+                        <button onClick={() => notif.markAllRead()}
+                          className="text-xs font-semibold text-emerald-700 hover:text-emerald-800">
+                          Tandai semua dibaca
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-[26rem] overflow-y-auto">
+                      {notif.items.map((n) => (
+                        <button
+                          key={n.id}
+                          onClick={() => {
+                            if (!n.read_at) notif.markRead(n.id);
+                            setNotifOpen(false);
+                            if (n.link) navigate(n.link);
+                          }}
+                          className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors ${n.read_at ? "" : "bg-emerald-50/40"}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {!n.read_at && <span className="mt-1.5 w-2 h-2 rounded-full bg-emerald-500 shrink-0" />}
+                            <div className={n.read_at ? "pl-4" : ""}>
+                              <p className={`text-sm ${n.read_at ? "text-slate-600" : "text-slate-900 font-semibold"}`}>{n.title}</p>
+                              {n.body && <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{n.body}</p>}
+                              <p className="text-[11px] text-slate-400 mt-1">{timeAgo(n.created_at)}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                      {!notif.items.length && (
+                        <div className="px-4 py-10 text-center">
+                          <Bell className="w-6 h-6 text-slate-200 mx-auto mb-2" />
+                          <p className="text-sm text-slate-400">Belum ada notifikasi.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+              </div>
 
               {/* Entity + User */}
               <div className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl border border-slate-200 bg-white">

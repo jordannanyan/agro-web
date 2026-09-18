@@ -12,7 +12,7 @@ const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 interface PODetail {
   id: number; po_number: string; vendor_name: string; entity_id: number | null; entity_name: string; budget_code: string | null;
   pr_number: string | null; order_date: string; due_date: string | null; payment_terms: string | null; status: string;
-  items: { id: number; pr_item_description: string | null; order_qty: number; unit_price: number; total: number }[];
+  items: { id: number; pr_item_description: string | null; budget_code: string | null; order_qty: number; unit_price: number; total: number }[];
   extra_costs: { id: number; description: string; amount: number }[];
   totals: { items_subtotal: number; extra_cost_total: number; subtotal: number; tax_amount: number; grand_total: number };
 }
@@ -86,6 +86,9 @@ export default function PurchaseOrderView() {
                 <table className="w-full">
                   <thead><tr className="bg-slate-50 border-b border-slate-100">
                     <th className="py-3 px-5 text-left text-xs font-semibold text-slate-600 uppercase">Deskripsi</th>
+                    {/* Per line: a request may span several budgets and the order
+                        carries them through rather than flattening them (2026-09-18). */}
+                    <th className="py-3 px-5 text-left text-xs font-semibold text-slate-600 uppercase">Budget Code</th>
                     <th className="py-3 px-5 text-right text-xs font-semibold text-slate-600 uppercase">Qty</th>
                     <th className="py-3 px-5 text-right text-xs font-semibold text-slate-600 uppercase">Harga</th>
                     <th className="py-3 px-5 text-right text-xs font-semibold text-slate-600 uppercase">Total</th>
@@ -94,6 +97,7 @@ export default function PurchaseOrderView() {
                     {data.items?.map((it) => (
                       <tr key={it.id} className="border-b border-slate-50">
                         <td className="py-3 px-5 text-sm text-slate-800">{it.pr_item_description || "Item"}</td>
+                        <td className="py-3 px-5 text-sm font-mono text-slate-500">{it.budget_code || "—"}</td>
                         <td className="py-3 px-5 text-sm font-mono text-slate-700 text-right">{Number(it.order_qty).toLocaleString("id-ID")}</td>
                         <td className="py-3 px-5 text-sm font-mono text-slate-700 text-right">{fmtRp(it.unit_price)}</td>
                         <td className="py-3 px-5 text-sm font-mono font-semibold text-slate-900 text-right">{fmtRp(it.total)}</td>
@@ -101,7 +105,7 @@ export default function PurchaseOrderView() {
                     ))}
                     {data.extra_costs?.map((e) => (
                       <tr key={`x${e.id}`} className="border-b border-slate-50 bg-amber-50/30">
-                        <td className="py-3 px-5 text-sm text-amber-700" colSpan={3}>+ {e.description}</td>
+                        <td className="py-3 px-5 text-sm text-amber-700" colSpan={4}>+ {e.description}</td>
                         <td className="py-3 px-5 text-sm font-mono text-amber-700 text-right">{fmtRp(e.amount)}</td>
                       </tr>
                     ))}

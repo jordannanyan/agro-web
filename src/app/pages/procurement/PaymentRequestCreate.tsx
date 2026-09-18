@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 import { ShowUsedSources } from "../../components/ShowUsedSources";
+import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
 
 interface BudgetCode { id: number; code: string; }
 interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; grand_total: number; }
@@ -62,6 +63,9 @@ export default function PaymentRequestCreate() {
   const [bankAccount, setBankAccount] = useState("");
   const [beneficiary, setBeneficiary] = useState("");
   const [saving, setSaving] = useState(false);
+  // Held until the document exists — see components/RequiredAttachments.
+  const [attachFiles, setAttachFiles] = useState<File[]>([]);
+  const [existingAttachments, setExistingAttachments] = useState(0);
   // See the PR form: a revision keeps its status when saved, and leaves through
   // "resubmit" rather than a first submission.
   const [docStatus, setDocStatus] = useState<string | null>(null);
@@ -127,6 +131,13 @@ export default function PaymentRequestCreate() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prId, poId, sourceType]);
 
+  useEffect(() => {
+    if (!id) return;
+    api.get<any[]>(`documents/PayReq/${id}/attachments`)
+      .then((rows) => setExistingAttachments((rows || []).length))
+      .catch(() => undefined);
+  }, [id]);
+
   // "keep" saves without touching the status — see the PR form.
   async function submit(status: "Draft" | "Pending" | "keep") {
     if (sourceType === "PR" && !prId) { toast.error("Pilih PR sumber"); return; }
@@ -135,6 +146,12 @@ export default function PaymentRequestCreate() {
     // catches the case where neither has a code.
     if (!budgetCodeId && srcBudget.id == null) { toast.error("Project Code wajib diisi - dokumen sumber belum punya budget code"); return; }
     if (!(Number(amount) > 0)) { toast.error("Nominal harus > 0"); return; }
+    // The invoice or receipt is the point of a payment request; the API refuses one
+    // that enters the chain without it.
+    if (status === "Pending" && !attachFiles.length && !existingAttachments) {
+      toast.error("Lampiran wajib diisi sebelum Payment Request diajukan");
+      return;
+    }
     const payload: any = {
       purchase_request_id: sourceType === "PR" ? Number(prId) : null,
       purchase_order_id: sourceType === "PO" ? Number(poId) : null,
@@ -149,7 +166,14 @@ export default function PaymentRequestCreate() {
     };
     setSaving(true);
     try {
-      const res = isEdit ? await api.put<any>(`payment-requests/${id}`, payload) : await api.post<any>("payment-requests", payload);
+      // Saved as a Draft first so the files have somewhere to go — see the PR form.
+      const submitting = status === "Pending";
+      const res = isEdit
+        ? await api.put<any>(`payment-requests/${id}`, { ...payload, ...(submitting ? { status: "Draft" } : {}) })
+        : await api.post<any>("payment-requests", { ...payload, ...(submitting ? { status: "Draft" } : {}) });
+      const docId = isEdit ? id : res.id;
+      if (attachFiles.length) await uploadPicked("PayReq", docId!, attachFiles, "Invoice");
+      if (submitting) await api.put(`payment-requests/${docId}`, { status: "Pending" });
       toast.success(
         status === "Draft" ? "PayReq disimpan draft"
           : status === "keep" ? "Perubahan revisi disimpan"
@@ -317,6 +341,13 @@ export default function PaymentRequestCreate() {
             <span className="text-lg font-bold font-mono">{fmtRp(Number(amount))}</span>
           </div>
         )}
+
+        <RequiredAttachments
+          files={attachFiles}
+          setFiles={setAttachFiles}
+          existingCount={existingAttachments}
+          hint="Lampirkan invoice, kuitansi, atau bukti tagihan yang dibayar."
+        />
 
         <div className="flex items-center justify-between pb-8">
           <button onClick={() => navigate("/procurement/payment-request")} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>

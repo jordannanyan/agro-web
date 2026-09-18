@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
 import { EntityField } from "../../components/EntityField";
 
 interface BudgetCode { id: number; code: string; }
@@ -38,6 +39,9 @@ export default function PurchaseRequestCreate() {
   const [dateRequired, setDateRequired] = useState("");
   const [items, setItems] = useState<Item[]>([newItem()]);
   const [saving, setSaving] = useState(false);
+  // Held here until the document exists — see components/RequiredAttachments.
+  const [attachFiles, setAttachFiles] = useState<File[]>([]);
+  const [existingAttachments, setExistingAttachments] = useState(0);
   // Editing a request an approver sent back is a different act from finishing a
   // draft: the status must survive the save, and the way out is "resubmit", not
   // "submit for the first time".
@@ -80,10 +84,25 @@ export default function PurchaseRequestCreate() {
 
   // "keep" saves the changes without touching the status — used while a request
   // is in revision, where moving it back to Draft would strand the approval chain.
+  // An edit does not have to re-upload what is already attached, so the form has to
+  // know whether there is anything there before it decides the rule is unmet.
+  useEffect(() => {
+    if (!id) return;
+    api.get<any[]>(`documents/PR/${id}/attachments`)
+      .then((rows) => setExistingAttachments((rows || []).length))
+      .catch(() => undefined);
+  }, [id]);
+
   async function submit(status: "Draft" | "Pending" | "keep") {
     if (!entityId) { toast.error("Pilih entitas"); return; }
     const validItems = items.filter((it) => it.description.trim() && parseFloat(it.quantity) > 0);
     if (validItems.length === 0) { toast.error("Tambahkan minimal 1 item dengan deskripsi & qty"); return; }
+    // Submitting means entering the approval chain, which the API refuses without an
+    // attachment. Caught here so nobody meets that refusal after filling in a form.
+    if (status === "Pending" && !attachFiles.length && !existingAttachments) {
+      toast.error("Lampiran wajib diisi sebelum PR diajukan");
+      return;
+    }
     const payload = {
       entity_id: Number(entityId),
       request_date: requestDate,
@@ -100,9 +119,18 @@ export default function PurchaseRequestCreate() {
     };
     setSaving(true);
     try {
+      // A new document is always created as a Draft when files are waiting: they
+      // cannot be uploaded until it has an id, and the API will not let it leave
+      // Draft until they are there. Saved, uploaded, then submitted — three calls
+      // so the person makes one click.
+      const submitting = status === "Pending";
+      const createStatus = submitting && !isEdit ? "Draft" : status;
       const res = isEdit
-        ? await api.put<any>(`purchase-requests/${id}`, payload)
-        : await api.post<any>("purchase-requests", payload);
+        ? await api.put<any>(`purchase-requests/${id}`, { ...payload, ...(submitting ? { status: "Draft" } : {}) })
+        : await api.post<any>("purchase-requests", { ...payload, ...(status === "keep" ? {} : { status: createStatus }) });
+      const docId = isEdit ? id : res.id;
+      if (attachFiles.length) await uploadPicked("PR", docId!, attachFiles, "Dokumen Pendukung");
+      if (submitting) await api.put(`purchase-requests/${docId}`, { status: "Pending" });
       toast.success(
         status === "Draft" ? "PR disimpan sebagai draft"
           : status === "keep" ? "Perubahan revisi disimpan"
@@ -192,6 +220,13 @@ export default function PurchaseRequestCreate() {
             <span className="text-xl font-bold text-slate-900 font-mono">{fmtRp(grandTotal)}</span>
           </div>
         </div>
+
+        <RequiredAttachments
+          files={attachFiles}
+          setFiles={setAttachFiles}
+          existingCount={existingAttachments}
+          hint="Lampirkan penawaran, ToR, atau dokumen pendukung lain."
+        />
 
         <div className="flex items-center justify-between pb-8">
           <button onClick={() => navigate("/procurement/purchase-request")} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>

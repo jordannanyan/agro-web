@@ -105,8 +105,9 @@ export function SourceDocumentPreview({
           {number && <span className="font-mono text-slate-700 normal-case">{number}</span>}
         </h2>
         <div className="flex items-center gap-2">
-          {/* A PO holds one budget code for the whole order — say which, so the next
-              document in the chain can simply follow it. */}
+          {/* The order's own code, kept as a badge for the orders that carry a single
+              one. Where the lines disagree the column below is the truth, and this is
+              only where the document as a whole was filed. */}
           {!isPR && data?.budget_code && (
             <span className="text-xs font-semibold px-2 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200 font-mono">
               {data.budget_code}
@@ -135,7 +136,10 @@ export function SourceDocumentPreview({
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className={`${th} text-left`}>Deskripsi</th>
-                {isPR && <th className={`${th} text-left`}>Budget</th>}
+                {/* Shown for orders too since 2026-09-18: a request may span several
+                    budgets, and an order raised from it carries them line by line.
+                    Printing only the document's single code hid that. */}
+                <th className={`${th} text-left`}>Budget</th>
                 <th className={`${th} text-left`}>Saprodi</th>
                 <th className={`${th} text-left`}>Unit</th>
                 <th className={`${th} text-right`}>Qty</th>
@@ -149,7 +153,7 @@ export function SourceDocumentPreview({
                   <td className="py-2 px-3 text-sm text-slate-800">
                     {isPR ? it.description : (it.pr_item_description || "Item")}
                   </td>
-                  {isPR && <td className="py-2 px-3 text-sm font-mono text-slate-500">{it.budget_code || "—"}</td>}
+                  <td className="py-2 px-3 text-sm font-mono text-slate-500">{it.budget_code || "—"}</td>
                   <td className="py-2 px-3 text-sm text-slate-500">{it.sapropdi_name || "—"}</td>
                   <td className="py-2 px-3 text-sm text-slate-500">{it.unit_name || "—"}</td>
                   <td className="py-2 px-3 text-sm font-mono text-slate-700 text-right">

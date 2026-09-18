@@ -125,10 +125,18 @@ export function ApprovalTimeline({
                     onClick={() => (noteFor === s.id ? act(s.id, "revision") : setNoteFor(s.id))}>
                     <RotateCcw className="w-4 h-4 mr-1" />Revisi
                   </Button>
-                  <Button size="sm" variant="outline" className="text-red-600" disabled={busy === s.id}
-                    onClick={() => (noteFor === s.id ? act(s.id, "reject") : setNoteFor(s.id))}>
-                    <X className="w-4 h-4 mr-1" />Tolak
-                  </Button>
+                  {/* A purchase order is never refused outright (2026-09-18): it is a
+                      commitment already agreed with a vendor, and the answer to one
+                      that is wrong is to send it back — which "Revisi" does, and
+                      which now restarts the chain anyway. Rejecting it would strand
+                      the request behind it with nowhere to go. The API refuses this
+                      too, so hiding the button is a courtesy, not the control. */}
+                  {docType !== "PO" && (
+                    <Button size="sm" variant="outline" className="text-red-600" disabled={busy === s.id}
+                      onClick={() => (noteFor === s.id ? act(s.id, "reject") : setNoteFor(s.id))}>
+                      <X className="w-4 h-4 mr-1" />Tolak
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
