@@ -101,7 +101,12 @@ export default function StockManagement() {
               <tbody>
                 {siList.map((r) => (
                   <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                    <td className="py-3 px-5 text-sm font-mono font-semibold text-emerald-700">{r.stock_in_number}</td>
+                    <td className="py-3 px-5 text-sm font-mono font-semibold">
+                      {/* Clickable since the detail page exists: the surat jalan and
+                          the per-item photos are only readable there. */}
+                      <button onClick={() => navigate(`/warehouse/stockin/${r.id}`)}
+                        className="text-emerald-700 hover:underline">{r.stock_in_number}</button>
+                    </td>
                     <td className="py-3 px-5 text-sm text-slate-600">{r.stock_in_date}</td>
                     {!bound && <td className="py-3 px-5"><EntityTag name={r.entity_name} /></td>}
                     <td className="py-3 px-5 text-sm text-slate-700">{r.warehouse_name}</td>

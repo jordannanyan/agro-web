@@ -8,7 +8,7 @@ import { Button } from "./ui/button";
 interface Attachment { id: number; category: string | null; subcategory: string | null; file_path: string; created_at: string | null; }
 
 export function DocumentAttachments({ docType, docId, categories }: {
-  docType: "PR" | "PO" | "PayReq" | "Reimbursement" | "Expense";
+  docType: "PR" | "PO" | "PayReq" | "Reimbursement" | "Expense" | "StockIn" | "StockInItem" | "StockOut";
   docId: number;
   categories?: string[];
 }) {

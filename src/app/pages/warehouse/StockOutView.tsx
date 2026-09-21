@@ -2,6 +2,7 @@ import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, PackageMinus } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
+import { DocumentAttachments } from "../../components/DocumentAttachments";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -90,6 +91,15 @@ export default function StockOutView() {
                 </tbody>
               </table>
             </div>
+          </Card>
+
+          {/* Evidence for the issue: the signed hand-over, a photo of the load, a
+              receipt from whoever collected it. Kept on the document rather than
+              per line — a stock-out leaves the warehouse once, however many farmers
+              it is split between. */}
+          <Card className="p-6">
+            <DocumentAttachments docType="StockOut" docId={data.id}
+              categories={["Bukti Serah Terima", "Foto Barang", "Surat Jalan", "Lainnya"]} />
           </Card>
         </>
       )}

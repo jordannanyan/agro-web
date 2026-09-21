@@ -18,6 +18,7 @@ import MapMonitoring from "./pages/MapMonitoring";
 import WarehouseDashboardSimple from "./pages/warehouse/WarehouseDashboardSimple";
 import StockManagement from "./pages/warehouse/StockManagement";
 import StockInCreate from "./pages/warehouse/StockInCreate";
+import StockInView from "./pages/warehouse/StockInView";
 import StockOutList from "./pages/warehouse/StockOutList";
 import StockOutCreate from "./pages/warehouse/StockOutCreate";
 import StockOutView from "./pages/warehouse/StockOutView";
@@ -88,6 +89,9 @@ export const router = createBrowserRouter([
       // Legacy route kept for compatibility
       { path: "warehouse/stock-management",    Component: StockManagement },
       { path: "warehouse/stockin/create",      Component: StockInCreate },
+      // Detail penerimaan: satu-satunya tempat surat jalan dan foto per barang
+      // bisa dibaca kembali setelah disimpan.
+      { path: "warehouse/stockin/:id",         Component: StockInView },
       { path: "warehouse/stockin/:id",         Component: StockInCreate },
       { path: "warehouse/stock-card",          Component: StockCard },
       { path: "warehouse/reorder",             Component: ReorderMonitoring },

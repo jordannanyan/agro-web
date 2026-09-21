@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, PackagePlus, Plus, Trash2, Save, Download } from "lucide-react";
+import { ArrowLeft, PackagePlus, Plus, Trash2, Save, Download, Camera, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 import { ShowUsedSources } from "../../components/ShowUsedSources";
+import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
 
 interface Warehouse { id: number; warehouse_name: string; }
 interface Sapropdi { id: number; sapropdi_name: string; }
@@ -19,10 +20,20 @@ interface Item {
   /** How much that line ordered - shown beside the received qty, never sent. */
   order_qty: number | null;
   description: string | null;
+  /**
+   * Photos of what actually came off the truck, for THIS line.
+   *
+   * Held here until the document is saved, because an attachment needs a row to
+   * hang off and the line has no id until then. Uploaded against 'StockInItem'
+   * once the save returns the ids — a photo that cannot say which item it is of
+   * answers nothing, which is the whole reason it is per line rather than per
+   * document.
+   */
+  photos: File[];
 }
 
 const rid = () => Math.random().toString(36).slice(2);
-const newItem = (): Item => ({ key: rid(), sapropdi_id: "", received_qty: "", item_condition: "Good", remarks: "", po_item_id: null, order_qty: null, description: null });
+const newItem = (): Item => ({ key: rid(), sapropdi_id: "", received_qty: "", item_condition: "Good", remarks: "", po_item_id: null, order_qty: null, description: null, photos: [] });
 const isBlank = (it: Item) => !it.sapropdi_id && !it.received_qty && !it.remarks;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
@@ -49,6 +60,9 @@ export default function StockInCreate() {
   const [items, setItems] = useState<Item[]>([newItem()]);
   const [saving, setSaving] = useState(false);
   const [poItems, setPoItems] = useState<any[]>([]);
+  // One delivery note covers the whole shipment, so it hangs off the document
+  // rather than any one line. The photos are the other way round — see Item.photos.
+  const [noteFiles, setNoteFiles] = useState<File[]>([]);
 
   const upd = (key: string, f: keyof Item, v: string) => setItems((p) => p.map((it) => (it.key === key ? { ...it, [f]: v } : it)));
 
@@ -63,6 +77,7 @@ export default function StockInCreate() {
       po_item_id: it.id ?? null,
       order_qty: it.order_qty != null ? Number(it.order_qty) : null,
       description: it.pr_item_description ?? null,
+      photos: [],
     }));
 
   // Receiving against a PO means receiving the lines that PO ordered, so the rows
@@ -93,12 +108,26 @@ export default function StockInCreate() {
     if (!valid.length) { toast.error("Tambahkan minimal 1 item saprodi dengan qty"); return; }
     setSaving(true);
     try {
-      await api.post("stock-in", {
+      const saved = await api.post<any>("stock-in", {
         purchase_order_id: poId ? Number(poId) : null,
         warehouse_id: Number(warehouseId), stock_in_date: date,
         delivery_note_no: deliveryNote || null, vehicle_number: vehicle || null, status, notes: notes || null,
         items: valid.map((it) => ({ po_item_id: it.po_item_id, sapropdi_id: Number(it.sapropdi_id), received_qty: Number(it.received_qty), item_condition: it.item_condition, remarks: it.remarks || null })),
       });
+
+      // Files can only be attached once the rows exist. The response carries the
+      // saved lines in the order they were sent, which is how each line's photos
+      // find their own id.
+      if (noteFiles.length) await uploadPicked("StockIn", saved.id, noteFiles, "Surat Jalan");
+      const savedItems: any[] = Array.isArray(saved.items) ? saved.items : [];
+      for (let i = 0; i < valid.length; i++) {
+        const photos = valid[i].photos;
+        if (!photos.length) continue;
+        const row = savedItems[i];
+        if (!row?.id) continue;
+        await uploadPicked("StockInItem", row.id, photos, "Foto Barang");
+      }
+
       toast.success("Stock In tercatat"); navigate("/warehouse/stock-in");
     } catch (e: any) { toast.error(e?.message || "Gagal menyimpan"); }
     finally { setSaving(false); }
@@ -148,7 +177,7 @@ export default function StockInCreate() {
           </div>
           <table className="w-full">
             <thead><tr className="text-left text-xs text-slate-500 uppercase tracking-wide border-b border-slate-100">
-              <th className="py-2 pr-3 font-semibold">Saprodi</th><th className="py-2 px-3 font-semibold text-right">Qty PO</th><th className="py-2 px-3 font-semibold text-right">Qty Diterima</th><th className="py-2 px-3 font-semibold">Kondisi</th><th className="py-2 px-3 font-semibold">Keterangan</th><th />
+              <th className="py-2 pr-3 font-semibold">Saprodi</th><th className="py-2 px-3 font-semibold text-right">Qty PO</th><th className="py-2 px-3 font-semibold text-right">Qty Diterima</th><th className="py-2 px-3 font-semibold">Kondisi</th><th className="py-2 px-3 font-semibold">Keterangan</th><th className="py-2 px-3 font-semibold">Foto Barang</th><th />
             </tr></thead>
             <tbody>
               {items.map((it) => (
@@ -168,12 +197,47 @@ export default function StockInCreate() {
                   </td>
                   <td className="py-2 px-3 w-32"><select value={it.item_condition} onChange={(e) => upd(it.key, "item_condition", e.target.value)} className={selectCls}><option>Good</option><option>Damaged</option><option>Shortage</option></select></td>
                   <td className="py-2 px-3"><Input value={it.remarks} onChange={(e) => upd(it.key, "remarks", e.target.value)} placeholder="Opsional" /></td>
+                  {/* Per line, not per document: the photo has to be able to say
+                      which item it is a photo of. Uploaded after the save, when the
+                      line finally has an id. */}
+                  <td className="py-2 px-3 w-44">
+                    <label className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-700 cursor-pointer">
+                      <input type="file" multiple accept="image/*,application/pdf" className="hidden"
+                        onChange={(e) => {
+                          const picked = Array.from(e.target.files || []);
+                          if (picked.length) {
+                            setItems((p) => p.map((x) => (x.key === it.key ? { ...x, photos: [...x.photos, ...picked] } : x)));
+                          }
+                          e.currentTarget.value = "";
+                        }} />
+                      <Camera className="w-4 h-4" />{it.photos.length ? `${it.photos.length} foto` : "Tambah foto"}
+                    </label>
+                    {it.photos.length > 0 && (
+                      <ul className="mt-1 space-y-0.5">
+                        {it.photos.map((f, i) => (
+                          <li key={`${f.name}-${i}`} className="flex items-center gap-1 text-[11px] text-slate-500">
+                            <span className="flex-1 truncate" title={f.name}>{f.name}</span>
+                            <button type="button" title="Buang"
+                              onClick={() => setItems((p) => p.map((x) => (x.key === it.key ? { ...x, photos: x.photos.filter((_, j) => j !== i) } : x)))}
+                              className="text-slate-300 hover:text-red-600"><X className="w-3 h-3" /></button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
                   <td className="py-2 pl-3">{items.length > 1 && <button onClick={() => setItems((p) => p.filter((x) => x.key !== it.key))} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        <RequiredAttachments
+          files={noteFiles}
+          setFiles={setNoteFiles}
+          existingCount={0}
+          hint="Lampirkan surat jalan pengiriman. Satu surat jalan berlaku untuk seluruh kiriman, jadi ditaruh di sini — foto per barang diisi di tabel di atas."
+        />
 
         <div className="flex items-center justify-between pb-8">
           <button onClick={() => navigate("/warehouse/stock-in")} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>
