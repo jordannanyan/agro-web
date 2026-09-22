@@ -13,6 +13,7 @@ import { useAuth } from "../../store/AuthContext";
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
+interface Plot { id: number; plot_name: string | null; farmer_name?: string | null }
 interface Warehouse { id: number; warehouse_name: string; }
 interface Row {
   id: number; stock_out_number: string; stock_out_date: string;
@@ -24,19 +25,25 @@ interface Row {
 export default function StockOutList() {
   const navigate = useNavigate();
   const [warehouseId, setWarehouseId] = useState("");
+  // Which plot the goods went to. It lives on the LINES, not on the header — a
+  // stock-out can be split across several plots — so the API asks whether any line
+  // went there rather than joining and duplicating the row.
+  const [plotId, setPlotId] = useState("");
   const [search, setSearch] = useState("");
   const bound = useEntityBound();
   const [entityFilter, setEntityFilter] = useState("");
   const { data: warehouses } = useApi<Warehouse[]>("warehouses", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
+  const { data: plots } = useApi<Plot[]>("plots", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
   const { user } = useAuth();
   const mayWrite = canWriteOperations(user);
   const {
     rows: list, meta, page, setPage, perPage, setPerPage, loading, error,
   } = usePagedApi<Row>("stock-out", {
     warehouse_id: warehouseId || undefined,
+    plot_id: plotId || undefined,
     entity_id: entityFilter || undefined,
     search: search || undefined,
-  }, [warehouseId, entityFilter, search]);
+  }, [warehouseId, plotId, entityFilter, search]);
 
   const th = "text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap";
 
@@ -63,6 +70,15 @@ export default function StockOutList() {
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <option value="">Semua gudang</option>
             {(warehouses || []).map((w) => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
+          </select>
+          <select value={plotId} onChange={(e) => setPlotId(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <option value="">Semua plot</option>
+            {(plots || []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.plot_name || `Plot #${p.id}`}{p.farmer_name ? ` · ${p.farmer_name}` : ""}
+              </option>
+            ))}
           </select>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

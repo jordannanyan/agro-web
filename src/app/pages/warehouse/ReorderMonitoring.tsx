@@ -21,6 +21,7 @@ import { EntityScopeBar } from "../../components/EntityScope";
 interface ApiReorder {
   id: number; warehouse_id: number; warehouse_name: string;
   sapropdi_id: number; sapropdi_name: string;
+  category: string | null; unit_name: string | null;
   min_stock: number; reorder_qty: number; is_active: number;
   current_stock: number; shortage: number; status: string;
 }
@@ -29,13 +30,13 @@ function toReorderItem(r: ApiReorder): ReorderItem {
     id: String(r.id),
     itemCode: `SPD-${String(r.sapropdi_id).padStart(3, "0")}`,
     itemName: r.sapropdi_name,
-    category: "3_Material",
+    category: r.category || "—",
     warehouse: r.warehouse_name,
-    unit: "",
+    unit: r.unit_name || "",
     currentStock: Number(r.current_stock || 0),
     minimumStock: Number(r.min_stock || 0),
     shortage: Number(r.shortage || 0),
-    status: r.status === "Critical" ? "Critical" : "Low",
+    status: r.status === "Critical" ? "Critical" : r.status === "Low" ? "Low" : "OK",
     lastStockIn: "—",
     lastPR: "—",
     suggestedReorder: Number(r.reorder_qty || 0),
@@ -52,111 +53,17 @@ interface ReorderItem {
   currentStock: number;
   minimumStock: number;
   shortage: number;
-  status: "Low" | "Critical";
+  status: "OK" | "Low" | "Critical";
   lastStockIn: string;
   lastPR: string;
   suggestedReorder: number;
 }
 
-const mockReorderData: ReorderItem[] = [
-  {
-    id: "R-001",
-    itemCode: "MAT-003",
-    itemName: "Planting Sacks Large",
-    category: "3_Material",
-    warehouse: "Gudang Utama – Jambi",
-    unit: "Pcs",
-    currentStock: 400,
-    minimumStock: 500,
-    shortage: 100,
-    status: "Low",
-    lastStockIn: "2026-06-01",
-    lastPR: "PR-2026-041",
-    suggestedReorder: 500,
-  },
-  {
-    id: "R-002",
-    itemCode: "EQP-002",
-    itemName: "Pruning Shears Heavy Duty",
-    category: "1_Investment",
-    warehouse: "Gudang Lapangan – Sumatra",
-    unit: "Pcs",
-    currentStock: 3,
-    minimumStock: 10,
-    shortage: 7,
-    status: "Critical",
-    lastStockIn: "2026-05-15",
-    lastPR: "PR-2026-038",
-    suggestedReorder: 20,
-  },
-  {
-    id: "R-003",
-    itemCode: "MAT-005",
-    itemName: "Fungicide Mancozeb 80WP",
-    category: "3_Material",
-    warehouse: "Gudang Utama – Jambi",
-    unit: "Kg",
-    currentStock: 8,
-    minimumStock: 20,
-    shortage: 12,
-    status: "Critical",
-    lastStockIn: "2026-05-28",
-    lastPR: "PR-2026-040",
-    suggestedReorder: 50,
-  },
-  {
-    id: "R-004",
-    itemCode: "MAT-006",
-    itemName: "Mulching Plastic Black",
-    category: "3_Material",
-    warehouse: "Gudang Lapangan – Sarolangun",
-    unit: "Roll",
-    currentStock: 15,
-    minimumStock: 20,
-    shortage: 5,
-    status: "Low",
-    lastStockIn: "2026-05-25",
-    lastPR: "PR-2026-039",
-    suggestedReorder: 30,
-  },
-  {
-    id: "R-005",
-    itemCode: "EQP-003",
-    itemName: "Soil pH Meter Digital",
-    category: "1_Investment",
-    warehouse: "Gudang Utama – Jambi",
-    unit: "Unit",
-    currentStock: 1,
-    minimumStock: 5,
-    shortage: 4,
-    status: "Critical",
-    lastStockIn: "2026-04-10",
-    lastPR: "PR-2026-025",
-    suggestedReorder: 10,
-  },
-  {
-    id: "R-006",
-    itemCode: "MAT-007",
-    itemName: "Bio Stimulant Fertilizer",
-    category: "3_Material",
-    warehouse: "Gudang Lapangan – Sumatra",
-    unit: "Liter",
-    currentStock: 18,
-    minimumStock: 25,
-    shortage: 7,
-    status: "Low",
-    lastStockIn: "2026-05-30",
-    lastPR: "PR-2026-041",
-    suggestedReorder: 50,
-  },
-];
-
-const WAREHOUSES = ["All Warehouses", "Gudang Utama – Jambi", "Gudang Lapangan – Sumatra", "Gudang Lapangan – Sarolangun"];
-const STATUS_FILTER = ["All Status", "Low", "Critical"];
-const CATEGORIES = ["All Categories", "1_Investment", "3_Material"];
+const STATUS_FILTER = ["All Status", "OK", "Low", "Critical"];
 
 function getStatusBadge(status: string) {
   const map: Record<string, string> = {
+    OK: "bg-emerald-50 text-emerald-700 border-emerald-200",
     Low: "bg-amber-50 text-amber-700 border-amber-200",
     Critical: "bg-red-50 text-red-700 border-red-200",
   };
@@ -166,11 +73,23 @@ function getStatusBadge(status: string) {
 export default function ReorderMonitoring() {
   const navigate = useNavigate();
   const { data: apiRows, loading, error } = useApi<ApiReorder[]>("warehouse-stock/reorder");
-  // Only show items at/below minimum (Low/Critical) — skip 'OK'.
-  const reorderData = useMemo(
-    () => (apiRows || []).filter((r) => r.status === "Low" || r.status === "Critical").map(toReorderItem),
-    [apiRows]
-  );
+  // Every configured reorder level, including the ones sitting comfortably above
+  // their minimum. Hiding those made the page answer only "what is wrong now" and
+  // never "is this item being watched at all" — and an item nobody can find on the
+  // screen looks like an item nobody set a minimum for. The status filter is still
+  // there for anyone who wants the short list.
+  const reorderData = useMemo(() => (apiRows || []).map(toReorderItem), [apiRows]);
+
+  // Filter options come from the rows on screen, not from a list typed into the
+  // prototype. The old hardcoded warehouse names matched nothing in this database,
+  // so picking one emptied the table — which reads as "no data" rather than "wrong
+  // list".
+  const WAREHOUSES = useMemo(
+    () => ["All Warehouses", ...[...new Set(reorderData.map((r) => r.warehouse).filter(Boolean))].sort()],
+    [reorderData]);
+  const CATEGORIES = useMemo(
+    () => ["All Categories", ...[...new Set(reorderData.map((r) => r.category).filter(Boolean))].sort()],
+    [reorderData]);
 
   const [search, setSearch] = useState("");
   const [selectedWarehouse, setSelectedWarehouse] = useState("All Warehouses");

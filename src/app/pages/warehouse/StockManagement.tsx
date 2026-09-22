@@ -12,7 +12,7 @@ import { useAuth } from "../../store/AuthContext";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
-interface InvRow { warehouse_id: number; warehouse_name: string; sapropdi_id: number; sapropdi_name: string; total_in: number; total_out: number; remaining: number; entity_name: string | null; }
+interface InvRow { warehouse_id: number; warehouse_name: string; sapropdi_id: number; sapropdi_name: string; unit_name: string | null; total_in: number; total_out: number; remaining: number; entity_name: string | null; }
 interface StockInRow { id: number; stock_in_number: string; stock_in_date: string; warehouse_name: string; po_number: string | null; status: string; entity_name: string | null; }
 interface Warehouse { id: number; warehouse_name: string; }
 
@@ -74,7 +74,9 @@ export default function StockManagement() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-slate-50 border-b border-slate-100">
-                {[...(bound ? [] : ["Entitas"]), "Gudang", "Saprodi", "Total Masuk", "Total Keluar", "Sisa Stok"].map((h) => <th key={h} className={`${["Total Masuk", "Total Keluar", "Sisa Stok"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
+                {/* Satuan sits beside the quantities: "40" on its own is a number
+                    nobody can act on — 40 sacks, 40 kilos, 40 litres? */}
+                {[...(bound ? [] : ["Entitas"]), "Gudang", "Saprodi", "Satuan", "Total Masuk", "Total Keluar", "Sisa Stok"].map((h) => <th key={h} className={`${["Total Masuk", "Total Keluar", "Sisa Stok"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {invList.map((r) => (
@@ -82,6 +84,7 @@ export default function StockManagement() {
                     {!bound && <td className="py-3 px-5"><EntityTag name={r.entity_name} /></td>}
                     <td className="py-3 px-5 text-sm text-slate-600">{r.warehouse_name}</td>
                     <td className="py-3 px-5 text-sm font-semibold text-slate-900">{r.sapropdi_name}</td>
+                    <td className="py-3 px-5 text-sm text-slate-500">{r.unit_name || "—"}</td>
                     <td className="py-3 px-5 text-right text-sm font-mono text-emerald-700">{num(r.total_in)}</td>
                     <td className="py-3 px-5 text-right text-sm font-mono text-amber-700">{num(r.total_out)}</td>
                     <td className="py-3 px-5 text-right text-sm font-mono font-bold text-slate-900">{num(r.remaining)}</td>
