@@ -92,7 +92,6 @@ export const router = createBrowserRouter([
       // Detail penerimaan: satu-satunya tempat surat jalan dan foto per barang
       // bisa dibaca kembali setelah disimpan.
       { path: "warehouse/stockin/:id",         Component: StockInView },
-      { path: "warehouse/stockin/:id",         Component: StockInCreate },
       { path: "warehouse/stock-card",          Component: StockCard },
       { path: "warehouse/reorder",             Component: ReorderMonitoring },
       { path: "warehouse/reports",             Component: WarehouseReports },

@@ -25,6 +25,8 @@ export const ROLE = {
   FINANCE_MANAGER: "FINANCE_MANAGER",
   FINANCE_STAFF: "FINANCE_STAFF",
   DIRECTOR: "DIRECTOR",
+  /** Runs a warehouse and nothing else — see the route table below. */
+  WAREHOUSE_STAFF: "WAREHOUSE_STAFF",
   SUPER_ADMIN: "SUPER_ADMIN",
   ADMIN: "ADMIN",
 } as const;
@@ -82,8 +84,11 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   { prefix: "/reimbursement",  roles: [...BUSINESS_CHAIN, ROLE.FINANCE_STAFF] },
 
   { prefix: "/transaction",    roles: BUSINESS_CHAIN },
-  // Field Admin handles stock in/out (Bambang at SNBS, Alfina at JNBS).
-  { prefix: "/warehouse",      roles: BUSINESS_CHAIN },
+  // Field Admin handles stock in/out (Bambang at SNBS, Alfina at JNBS), and so does
+  // the dedicated storekeeper — who sees this area and nothing else. Every other
+  // prefix in this table omits WAREHOUSE_STAFF on purpose: a person who only runs a
+  // warehouse should not be handed procurement, transactions or farmer payments.
+  { prefix: "/warehouse",      roles: [...BUSINESS_CHAIN, ROLE.WAREHOUSE_STAFF] },
   { prefix: "/prefinance",     roles: ABOVE_FIELD_ADMIN },
   { prefix: "/financial",      roles: FINANCE },
   { prefix: "/profit-sharing", roles: [ROLE.FINANCE_MANAGER, ROLE.DIRECTOR] },
@@ -106,7 +111,10 @@ export function canAccessPath(roleCode: string | null | undefined, path: string)
   // Admin met "Akses Ditolak" everywhere and the product was unusable for the
   // four people who hold that role.
   if (roleCode === ROLE.SUPER_ADMIN || roleCode === ROLE.ADMIN) return true;
-  if (path === "/") return true;
+  // The landing page is the executive dashboard: company KPIs, spend, revenue. It is
+  // open to everyone in the business flow, but not to somebody hired to run a
+  // warehouse — they are sent to the warehouse dashboard instead (see homePath).
+  if (path === "/") return roleCode !== ROLE.WAREHOUSE_STAFF;
   for (const r of RULES) {
     if (matches(path, r.prefix)) return r.roles.includes(roleCode as Role);
   }
@@ -317,6 +325,16 @@ export function revisionNote(approvals?: StepLike[] | null): { note: string | nu
  * cross-entity roles and the NBSV administrators — sees several, so their lists
  * have to name the entity each row belongs to.
  */
+/**
+ * Where a role starts when it signs in, and where "/" sends it.
+ *
+ * Only the warehouse staff differ: the executive dashboard is not theirs to read,
+ * and landing on a page they cannot open would greet them with "Akses Ditolak".
+ */
+export function homePath(roleCode: string | null | undefined): string {
+  return roleCode === ROLE.WAREHOUSE_STAFF ? "/warehouse" : "/";
+}
+
 export function isEntityBound(user: UserLike | null | undefined): boolean {
   if (!user) return false;
   if (isSystemAdmin(user.role_code)) return false;

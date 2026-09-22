@@ -23,7 +23,7 @@ import {
   HandCoins,
 } from "lucide-react";
 import { useAuth, initials } from "../store/AuthContext";
-import { canAccessPath } from "../lib/permissions";
+import { canAccessPath, homePath } from "../lib/permissions";
 import { useInboxCounts, type InboxCounts } from "../lib/inbox";
 import { useNotifications, timeAgo } from "../lib/notifications";
 
@@ -205,6 +205,14 @@ export default function DashboardLayout() {
 
   // Block direct-URL access to routes this role isn't allowed to open.
   const routeAllowed = canAccessPath(roleCode, location.pathname);
+
+  // A role whose home is not "/" is moved there rather than shown a refusal on the
+  // page it lands on after signing in.
+  useEffect(() => {
+    if (loading || !user) return;
+    const home = homePath(roleCode);
+    if (home !== "/" && location.pathname === "/") navigate(home, { replace: true });
+  }, [loading, user, roleCode, location.pathname, navigate]);
 
   return (
     <div className="flex h-screen bg-[#FAFBFC]">
