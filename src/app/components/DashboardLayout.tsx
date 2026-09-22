@@ -177,6 +177,20 @@ export default function DashboardLayout() {
   const notif = useNotifications(!loading && !!user);
   const [notifOpen, setNotifOpen] = useState(false);
 
+  // Also before the early returns, and for the reason the comment above gives: this
+  // used to sit further down, past `if (!user) return null`. Signing out made the
+  // component render one hook fewer than the render before it, and React refuses
+  // that outright — the whole screen was replaced by "Unexpected Application Error"
+  // on every logout.
+  //
+  // A role whose home is not "/" is moved there rather than shown a refusal on the
+  // page it lands on after signing in.
+  useEffect(() => {
+    if (loading || !user) return;
+    const home = homePath(user.role_code);
+    if (home !== "/" && location.pathname === "/") navigate(home, { replace: true });
+  }, [loading, user, location.pathname, navigate]);
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-[#FAFBFC] text-slate-400 text-sm">Memuat…</div>;
   }
@@ -206,13 +220,6 @@ export default function DashboardLayout() {
   // Block direct-URL access to routes this role isn't allowed to open.
   const routeAllowed = canAccessPath(roleCode, location.pathname);
 
-  // A role whose home is not "/" is moved there rather than shown a refusal on the
-  // page it lands on after signing in.
-  useEffect(() => {
-    if (loading || !user) return;
-    const home = homePath(roleCode);
-    if (home !== "/" && location.pathname === "/") navigate(home, { replace: true });
-  }, [loading, user, roleCode, location.pathname, navigate]);
 
   return (
     <div className="flex h-screen bg-[#FAFBFC]">
