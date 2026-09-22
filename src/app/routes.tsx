@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import DashboardLayout from "./components/DashboardLayout";
 import ExecutiveDashboard from "./pages/ExecutiveDashboard";
 import Procurement from "./pages/Procurement";
@@ -38,6 +38,9 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import ProfitSharingPage from "./pages/ProfitSharing";
 
+/** The claim list moved; anything still pointing at the old one is sent along. */
+const ClaimsRedirect = () => <Navigate to="/reimbursement" replace />;
+
 export const router = createBrowserRouter([
   { path: "/login", Component: Login },
   {
@@ -61,19 +64,32 @@ export const router = createBrowserRouter([
       { path: "procurement/po/create",         Component: PurchaseOrderCreate },
       { path: "procurement/po/:id/edit",       Component: PurchaseOrderCreate },
       { path: "procurement/po/:id",            Component: PurchaseOrderView },
-      // The reimbursement claim has its own screens: its own list, and a form that
-      // never asks for a source because it never has one.
-      { path: "procurement/payreq-reimbursement",            Component: Procurement },
-      { path: "procurement/payreq-reimbursement/create",     Component: PaymentRequestCreate },
-      { path: "procurement/payreq-reimbursement/:id/edit",   Component: PaymentRequestCreate },
-      { path: "procurement/payreq-reimbursement/:id",        Component: PaymentRequestView },
       { path: "procurement/payreq/create",     Component: PaymentRequestCreate },
       { path: "procurement/payreq/:id/edit",   Component: PaymentRequestCreate },
       { path: "procurement/payreq/:id",        Component: PaymentRequestView },
+      // Where the expense claim used to live, before it joined the farmer
+      // reimbursement under one menu. Kept because notifications, bookmarks and the
+      // links inside older documents still point here; the list route redirects and
+      // the detail routes simply resolve.
+      { path: "procurement/payreq-reimbursement",            Component: ClaimsRedirect },
+      { path: "procurement/payreq-reimbursement/create",     Component: PaymentRequestCreate },
+      { path: "procurement/payreq-reimbursement/:id/edit",   Component: PaymentRequestCreate },
+      { path: "procurement/payreq-reimbursement/:id",        Component: PaymentRequestView },
 
-      // ── Reimbursement (bayar petani lewat KTH) ────────────────────────────
+      // ── Payment Request Reimbursement ─────────────────────────────────────
+      // The payment requests that do not come from procurement, on one list: paying
+      // farmers through their KTH, and paying a member of staff back for money they
+      // laid out. Two forms, because the lines are different things — a list of
+      // farmers and days worked, against a list of receipts — but one menu, one
+      // approval chain and one set of approvers.
+      //
+      // The farmer kind keeps the bare /reimbursement/:id path it has always had, so
+      // nothing that already links to it breaks.
       { path: "reimbursement",                 Component: ReimbursementList },
       { path: "reimbursement/create",          Component: ReimbursementCreate },
+      { path: "reimbursement/pribadi/create",  Component: PaymentRequestCreate },
+      { path: "reimbursement/pribadi/:id/edit",Component: PaymentRequestCreate },
+      { path: "reimbursement/pribadi/:id",     Component: PaymentRequestView },
       { path: "reimbursement/:id/edit",        Component: ReimbursementCreate },
       { path: "reimbursement/:id",             Component: ReimbursementView },
 

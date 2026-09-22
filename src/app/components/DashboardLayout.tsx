@@ -37,11 +37,9 @@ const menuItems = [
       { id: "proc-pr",    label: "Purchase Request",  path: "/procurement/purchase-request" },
       { id: "proc-po",    label: "Purchase Order",     path: "/procurement/purchase-order" },
       { id: "proc-pay",   label: "Payment Request",    path: "/procurement/payment-request" },
-      // Its own screen, not an option inside the one above. A reimbursement claim
-      // has no purchase behind it and never asks for a PR or a PO, so a form that
-      // offers that choice is a form with a wrong answer on it. It is also the only
-      // payment request a Field Admin files.
-      { id: "proc-payrb", label: "Payment Request Reimbursement", path: "/procurement/payreq-reimbursement" },
+      // The reimbursement claim used to sit here. It has moved out to the menu of
+      // its own below, together with the farmer reimbursement: neither has a
+      // purchase behind it, and the people who file them do not work in procurement.
       { id: "proc-recon", label: "Rekonsiliasi Pembayaran", path: "/procurement/reconciliation" },
       { id: "proc-vendor",label: "Vendor List",        path: "/procurement/vendor" },
       { id: "proc-stock", label: "Stock List",         path: "/procurement/stock-list" },
@@ -103,12 +101,14 @@ const menuItems = [
     ],
   },
   // Bukan bagian Procurement: tidak ada yang dibeli, dan yang mengajukannya Field
-  // Admin — orang yang tidak boleh masuk ke menu Procurement sama sekali.
+  // Admin atau HR — orang-orang yang tidak boleh masuk ke menu Procurement.
   //
-  // Namanya "Reimbursement Petani" dan bukan "Payment Request": ini membayar PETANI
-  // lewat rekening KTH. Yang mengganti uang Field Admin sendiri adalah Payment
-  // Request di menu Procurement — dua hal berbeda yang sempat tertukar 18 Sep.
-  { id: "reimbursement", icon: HandCoins, label: "Reimbursement Petani", path: "/reimbursement" },
+  // Satu menu untuk dua jenis penggantian: ke PETANI lewat rekening KTH, dan ke
+  // ORANG yang menalangi uangnya sendiri. Keduanya disetujui oleh orang yang sama
+  // dengan urutan yang sama; yang berbeda cuma siapa yang mengajukan dan siapa yang
+  // diganti. Sebelumnya terpisah di dua menu, dan yang mengisi harus mengingat
+  // dokumennya dulu diajukan lewat menu yang mana.
+  { id: "reimbursement", icon: HandCoins, label: "Payment Request Reimbursement", path: "/reimbursement" },
   { id: "map", icon: MapIcon, label: "Map Monitoring", path: "/map" },
   { id: "reports", icon: FileText, label: "Laporan", path: "/reports" },
   { id: "settings", icon: Settings, label: "Settings", path: "/settings" },

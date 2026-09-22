@@ -9,7 +9,7 @@ import { api } from "../../lib/api";
 import { refreshInbox } from "../../lib/inbox";
 import { useApi } from "../../lib/hooks";
 import { useAuth } from "../../store/AuthContext";
-import { canRecordPayment, canOverridePayment } from "../../lib/permissions";
+import { canRecordPayment, canOverridePayment, type DocType } from "../../lib/permissions";
 import { ApprovalTimeline, ApprovalStep } from "../../components/ApprovalTimeline";
 import { DocumentAttachments } from "../../components/DocumentAttachments";
 import { DocumentActions, RevisionBanner } from "../../components/DocumentActions";
@@ -59,6 +59,15 @@ export default function PaymentRequestView() {
   const [copied, setCopied] = useState(false);
   const [copiedAccount, setCopiedAccount] = useState(false);
 
+  // Which of the two documents this page is showing. An expense claim shares this
+  // screen with a procurement payment request — same header, same chain, same
+  // payment — but it keeps its own document_type, and every polymorphic call on this
+  // page (approvals, attachments, edit) has to carry the right one or it reads
+  // somebody else's rows.
+  const isClaim = data?.payreq_kind === "Expense";
+  const docKind: DocType = isClaim ? "Expense" : "PayReq";
+  const backPath = isClaim ? "/reimbursement" : "/procurement/payment-request";
+
   // The approval chain must be fully signed off before cash may be released.
   // The API enforces this too — this only decides whether to show the form.
   const approvalSteps = (data?.approvals || []).filter((s) => s.step_label !== "Payment");
@@ -100,15 +109,18 @@ export default function PaymentRequestView() {
     <div className="min-h-screen bg-[#FAFBFC] -mx-8 -my-8">
       <div className="bg-white border-b border-slate-200 px-8 py-5">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate("/procurement/payment-request")} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
+          <button onClick={() => navigate(backPath)} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center"><CreditCard className="w-4 h-4 text-white" /></div>
-            <div><h1 className="text-slate-900 font-semibold text-lg font-mono">{data?.payreq_number || "Payment Request"}</h1><p className="text-slate-500 text-sm">Procurement → PayReq Detail</p></div>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isClaim ? "bg-violet-500" : "bg-amber-500"}`}><CreditCard className="w-4 h-4 text-white" /></div>
+            <div><h1 className="text-slate-900 font-semibold text-lg font-mono">{data?.payreq_number || "Payment Request"}</h1><p className="text-slate-500 text-sm">{isClaim ? "Payment Request Reimbursement → Pribadi" : "Procurement → PayReq Detail"}</p></div>
           </div>
           {data && (
             <div className="ml-auto flex items-center gap-3">
               <Badge className={`border ${statusBadge(data.status)}`}>{data.status}</Badge>
-              <DocumentActions docType="PayReq" doc={data} approvals={data.approvals} onChanged={refetch} />
+              {/* The kind decides which endpoint edits it and which form opens.
+                  Passing "PayReq" for a claim sent the editor to the procurement
+                  form, which asks for a PR or a PO the claim does not have. */}
+              <DocumentActions docType={docKind} doc={data} approvals={data.approvals} onChanged={refetch} />
             </div>
           )}
         </div>
@@ -119,7 +131,7 @@ export default function PaymentRequestView() {
         {error && <div className="text-center text-red-500 py-16 text-sm">{error}</div>}
         {data && (
           <>
-            <RevisionBanner docType="PayReq" doc={data} approvals={data.approvals} />
+            <RevisionBanner docType={docKind} doc={data} approvals={data.approvals} />
 
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -251,7 +263,7 @@ export default function PaymentRequestView() {
 
             <Card className="p-6">
               <h2 className="text-slate-900 font-semibold mb-4">Alur Approval</h2>
-              <ApprovalTimeline docType={data.payreq_kind === "Expense" ? "Expense" : "PayReq"} docId={data.id} steps={data.approvals || []} onChanged={refetch} />
+              <ApprovalTimeline docType={docKind} docId={data.id} steps={data.approvals || []} onChanged={refetch} />
             </Card>
 
             {/* Payment execution — step 5. Deliberately outside the approval timeline:
@@ -365,7 +377,7 @@ export default function PaymentRequestView() {
             )}
 
             <Card className="p-6">
-              <DocumentAttachments docType={data.payreq_kind === "Expense" ? "Expense" : "PayReq"} docId={data.id} categories={["Bukti Bayar", "Invoice", "ToR / Estimasi", "Lainnya"]} />
+              <DocumentAttachments docType={docKind} docId={data.id} categories={["Bukti Bayar", "Invoice", "ToR / Estimasi", "Lainnya"]} />
             </Card>
           </>
         )}

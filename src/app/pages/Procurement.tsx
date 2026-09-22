@@ -78,23 +78,15 @@ export default function Procurement() {
 
   const { data: prs, refetch: refetchPR } = useApi<PRRow[]>("purchase-requests", scopeQuery);
   const { data: pos } = useApi<PORow[]>("purchase-orders", scopeQuery);
-  // One list per screen. The claim screen asks for its own kind and nothing else,
-  // so a procurement payment request can never appear on it by accident.
-  const { data: pays } = useApi<PayRow[]>(
-    "payment-requests",
-    location.pathname.includes("/payreq-reimbursement")
-      ? { ...(scopeQuery || {}), kind: "Expense" }
-      : scopeQuery,
-    [location.pathname]);
+  // Procurement payment requests only. The two claim kinds that have no PR or PO
+  // behind them moved out to their own menu — see pages/reimbursement — so this
+  // list no longer has to ask which kind it is showing.
+  const { data: pays } = useApi<PayRow[]>("payment-requests", scopeQuery);
 
-  type ProcSection = "purchase-request" | "purchase-order" | "payment-request" | "payreq-reimbursement";
-  // The reimbursement claim is checked FIRST: its path would otherwise be read as
-  // the procurement one and the page would list the wrong documents.
+  type ProcSection = "purchase-request" | "purchase-order" | "payment-request";
   const section: ProcSection =
-    location.pathname.includes("/payreq-reimbursement") ? "payreq-reimbursement" :
     location.pathname.includes("/purchase-order") ? "purchase-order" :
     location.pathname.includes("/payment-request") ? "payment-request" : "purchase-request";
-  const isClaim = section === "payreq-reimbursement";
 
   const prList = prs || [], poList = pos || [], payList = pays || [];
   // What the signed-in role is actually holding up, across all three document types.
@@ -241,25 +233,19 @@ export default function Procurement() {
           </Card>
         )}
 
-        {/* One table, two screens. Which documents it holds is settled by the route,
-            not by a filter the reader has to notice. */}
-        {(section === "payment-request" || isClaim) && (
+        {section === "payment-request" && (
           <Card>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h2 className="text-slate-900 font-semibold mb-1">
-                  {isClaim ? "Payment Request Reimbursement" : "Payment Request List"}
-                </h2>
+                <h2 className="text-slate-900 font-semibold mb-1">Payment Request List</h2>
                 <p className="text-sm text-slate-500">
-                  {isClaim
-                    ? "Penggantian biaya yang ditalangi sendiri · tanpa PR/PO"
-                    : "Route A: langsung dari PR · Route B: dari PO"}
+                  Route A: langsung dari PR · Route B: dari PO
                 </p>
               </div>
               {mayWrite && (
                 <Button className="bg-amber-500 hover:bg-amber-600 text-white"
-                  onClick={() => navigate(isClaim ? "/procurement/payreq-reimbursement/create" : "/procurement/payreq/create")}>
-                  <Plus className="w-4 h-4 mr-2" />{isClaim ? "Buat Reimbursement" : "Create PayReq"}
+                  onClick={() => navigate("/procurement/payreq/create")}>
+                  <Plus className="w-4 h-4 mr-2" />Create PayReq
                 </Button>
               )}
             </div>
@@ -292,7 +278,7 @@ export default function Procurement() {
                       <td className="py-4 px-6 text-sm text-slate-600">{pay.estimated_pay_date || "—"}</td>
                       <td className="py-4 px-6"><DocumentStatus row={pay} docType="PayReq" /></td>
                       <td className="py-4 px-6"><div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => navigate(`${isClaim ? "/procurement/payreq-reimbursement" : "/procurement/payreq"}/${pay.id}`)}><Eye className="w-4 h-4" /></Button>
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`/procurement/payreq/${pay.id}`)}><Eye className="w-4 h-4" /></Button>
                       </div></td>
                     </tr>
                   ))}

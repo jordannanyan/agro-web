@@ -27,6 +27,12 @@ export const ROLE = {
   DIRECTOR: "DIRECTOR",
   /** Runs a warehouse and nothing else — see the route table below. */
   WAREHOUSE_STAFF: "WAREHOUSE_STAFF",
+  /**
+   * HR at WLI. Files the two payment requests that never come from procurement —
+   * paying farmers through a KTH, and paying somebody back for money they laid out
+   * — and signs nothing. Cross-entity: one of them serves every PT.
+   */
+  HR: "HR",
   SUPER_ADMIN: "SUPER_ADMIN",
   ADMIN: "ADMIN",
 } as const;
@@ -48,6 +54,15 @@ const ABOVE_FIELD_ADMIN: Role[] = [
 
 const FINANCE: Role[] = [ROLE.FINANCE_MANAGER, ROLE.FINANCE_STAFF, ROLE.DIRECTOR];
 
+/**
+ * Who may open the non-procurement payment requests.
+ *
+ * The whole business chain, because they approve them, plus Finance Staff who pay
+ * them, plus the HR who files them for every PT. Procurement is in only by virtue
+ * of BUSINESS_CHAIN — nothing is procured on either kind, and they raise neither.
+ */
+const CLAIM_ROLES: Role[] = [...BUSINESS_CHAIN, ROLE.FINANCE_STAFF, ROLE.HR];
+
 // Path prefix → allowed roles. Evaluated top-to-bottom; first match wins.
 // List more specific prefixes before general ones.
 const RULES: { prefix: string; roles: Role[] }[] = [
@@ -58,16 +73,12 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   // once the chain is signed off. They cannot approve — that is enforced by the API
   // and by canApprove() below.
   //
-  // The reimbursement claim: money a member of staff laid out and is asking back.
+  // Legacy home of the expense claim, kept only so links sent out before the two
+  // claims were merged still resolve. The menu now points at /reimbursement/pribadi;
+  // same people, so the two rules carry the same list.
   // Listed BEFORE the procurement payreq prefixes, because the rule table is read in
   // order and "/procurement/payreq" would otherwise swallow it.
-  //
-  // This is the only payment request a Field Admin files. The procurement one below
-  // demands a PR or a PO, which they never raise.
-  //
-  // (Not the same as Reimbursement Petani, the other source-less kind: that one
-  // reaches a farmer through a KTH, this one reaches the person who is out of pocket.)
-  { prefix: "/procurement/payreq-reimbursement", roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF, ROLE.FIELD_ADMIN] },
+  { prefix: "/procurement/payreq-reimbursement", roles: CLAIM_ROLES },
   { prefix: "/procurement/payment-request",  roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
   { prefix: "/procurement/payreq",           roles: [...ABOVE_FIELD_ADMIN, ROLE.FINANCE_STAFF] },
   // Reconciliation is the payment desk: the people who transfer the money and hold
@@ -79,9 +90,12 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   { prefix: "/procurement/stock-list",       roles: ABOVE_FIELD_ADMIN },
   { prefix: "/procurement",                  roles: ABOVE_FIELD_ADMIN },
 
-  // Reimbursement pays farmers, so the Field Admin who deals with the KTH files it.
-  // Finance Staff is here for the same reason as on PayReq: they release the cash.
-  { prefix: "/reimbursement",  roles: [...BUSINESS_CHAIN, ROLE.FINANCE_STAFF] },
+  // The two payment requests that never come from procurement, under one roof:
+  // paying farmers through their KTH, and paying a member of staff back for money
+  // they laid out. Filed by the Field Admin at each PT and by the HR who serves all
+  // of them; Finance Staff is here for the same reason as on PayReq — they release
+  // the cash.
+  { prefix: "/reimbursement",  roles: CLAIM_ROLES },
 
   { prefix: "/transaction",    roles: BUSINESS_CHAIN },
   // Field Admin handles stock in/out (Bambang at SNBS, Alfina at JNBS), and so does
@@ -114,7 +128,7 @@ export function canAccessPath(roleCode: string | null | undefined, path: string)
   // The landing page is the executive dashboard: company KPIs, spend, revenue. It is
   // open to everyone in the business flow, but not to somebody hired to run a
   // warehouse — they are sent to the warehouse dashboard instead (see homePath).
-  if (path === "/") return roleCode !== ROLE.WAREHOUSE_STAFF;
+  if (path === "/") return roleCode !== ROLE.WAREHOUSE_STAFF && roleCode !== ROLE.HR;
   for (const r of RULES) {
     if (matches(path, r.prefix)) return r.roles.includes(roleCode as Role);
   }
@@ -189,9 +203,9 @@ const WRITERS: Record<DocType, Role[]> = {
   // list only decides whether the New button appears at all.
   PayReq: [ROLE.FIELD_ADMIN, ROLE.PROCUREMENT, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
   // Nothing is procured on a reimbursement, so Procurement does not raise it.
-  Reimbursement: [ROLE.FIELD_ADMIN, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.SUPER_ADMIN],
+  Reimbursement: [ROLE.FIELD_ADMIN, ROLE.HR, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.SUPER_ADMIN],
   // An expense claim: whoever spent their own money asks for it back.
-  Expense: [ROLE.FIELD_ADMIN, ROLE.PROCUREMENT, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
+  Expense: [ROLE.FIELD_ADMIN, ROLE.HR, ROLE.PROCUREMENT, ROLE.PROJECT_MANAGER, ROLE.FINANCE_MANAGER, ROLE.DIRECTOR, ROLE.SUPER_ADMIN],
 };
 
 /** Who files each kind of document when the chain has not been seeded yet. */
@@ -332,7 +346,11 @@ export function revisionNote(approvals?: StepLike[] | null): { note: string | nu
  * and landing on a page they cannot open would greet them with "Akses Ditolak".
  */
 export function homePath(roleCode: string | null | undefined): string {
-  return roleCode === ROLE.WAREHOUSE_STAFF ? "/warehouse" : "/";
+  if (roleCode === ROLE.WAREHOUSE_STAFF) return "/warehouse";
+  // Same reasoning as the storekeeper: the HR files payment requests and does
+  // nothing else here, and the executive dashboard is company spend and revenue.
+  if (roleCode === ROLE.HR) return "/reimbursement";
+  return "/";
 }
 
 export function isEntityBound(user: UserLike | null | undefined): boolean {

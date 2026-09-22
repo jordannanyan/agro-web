@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { EntityField } from "../../components/EntityField";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 import { ShowUsedSources } from "../../components/ShowUsedSources";
 import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
@@ -29,9 +30,12 @@ export default function PaymentRequestCreate() {
    * "from PR / from PO / neither" choice would be offering an answer that is always
    * wrong on this screen. The screen it is filed on settles it instead.
    */
-  const claimMode = location.pathname.includes("/payreq-reimbursement");
-  const backTo = claimMode ? "/procurement/payreq-reimbursement" : "/procurement/payment-request";
-  const viewBase = claimMode ? "/procurement/payreq-reimbursement" : "/procurement/payreq";
+  // Two paths lead here in claim mode: the menu it lives under now, and the one it
+  // lived under before the two claims were merged. Old links still work.
+  const claimMode = location.pathname.includes("/payreq-reimbursement")
+    || location.pathname.includes("/reimbursement/pribadi");
+  const backTo = claimMode ? "/reimbursement" : "/procurement/payment-request";
+  const viewBase = claimMode ? "/reimbursement/pribadi" : "/procurement/payreq";
   const { data: budgetCodes } = useApi<BudgetCode[]>("budget-codes");
   // The bank has to be picked rather than typed: an export file carries the bank
   // *code*, and "BCA" / "bca" / "Bank BCA" are not one.
@@ -45,11 +49,17 @@ export default function PaymentRequestCreate() {
    * and has its own screen; this reaches the member of staff who is out of pocket.
    */
   const [sourceType, setSourceType] = useState<"PO" | "PR" | "Expense">(
-    location.pathname.includes("/payreq-reimbursement") ? "Expense" : "PO");
+    claimMode ? "Expense" : "PO");
   const isExpense = sourceType === "Expense";
   const [claimLines, setClaimLines] = useState<{ key: string; description: string; amount: string }[]>(
     [{ key: Math.random().toString(36).slice(2), description: "", amount: "" }]);
   const claimTotal = claimLines.reduce((t, l) => t + (Number(l.amount) || 0), 0);
+  // Which PT is paying. A procurement payment request reads it off its PR or PO, so
+  // the form never asks; a claim has no source document, so somebody has to say. For
+  // an entity-bound filer EntityField answers it silently from their own account —
+  // it is only the cross-entity roles (HR, Procurement, Finance, Director) who are
+  // asked, and without this they could not file a claim at all.
+  const [entityId, setEntityId] = useState("");
   const [prId, setPrId] = useState("");
   const [poId, setPoId] = useState("");
   // Both pickers drop the documents a payment has already been raised against, so
@@ -110,6 +120,7 @@ export default function PaymentRequestCreate() {
             ? p.items.map((it: any) => ({ key: `i${it.id}`, description: it.description ?? "", amount: String(it.amount ?? "") }))
             : [{ key: Math.random().toString(36).slice(2), description: "", amount: "" }]);
         }
+        setEntityId(p.entity_id ? String(p.entity_id) : "");
         setPrId(p.purchase_request_id ? String(p.purchase_request_id) : "");
         setPoId(p.purchase_order_id ? String(p.purchase_order_id) : "");
         setBudgetCodeId(p.budget_code_id ? String(p.budget_code_id) : "");
@@ -191,6 +202,7 @@ export default function PaymentRequestCreate() {
     if (!(Number(amount) > 0)) { toast.error("Nominal harus > 0"); return; }
     // The invoice or receipt is the point of a payment request; the API refuses one
     // that enters the chain without it.
+    if (isExpense && !entityId) { toast.error("Pilih entitas — PT mana yang membayar"); return; }
     if (status === "Pending" && !attachFiles.length && !existingAttachments) {
       toast.error("Lampiran wajib diisi sebelum Payment Request diajukan");
       return;
@@ -198,6 +210,7 @@ export default function PaymentRequestCreate() {
     const payload: any = {
       payreq_kind: isExpense ? "Expense" : "Procurement",
       ...(isExpense ? { items: filledClaims.map((l) => ({ description: l.description.trim(), amount: Number(l.amount) })) } : {}),
+      ...(isExpense ? { entity_id: entityId ? Number(entityId) : null } : {}),
       purchase_request_id: sourceType === "PR" ? Number(prId) : null,
       purchase_order_id: sourceType === "PO" ? Number(poId) : null,
       budget_code_id: budgetCodeId ? Number(budgetCodeId) : null,
@@ -217,7 +230,10 @@ export default function PaymentRequestCreate() {
         ? await api.put<any>(`payment-requests/${id}`, { ...payload, ...(submitting ? { status: "Draft" } : {}) })
         : await api.post<any>("payment-requests", { ...payload, ...(submitting ? { status: "Draft" } : {}) });
       const docId = isEdit ? id : res.id;
-      if (attachFiles.length) await uploadPicked("PayReq", docId!, attachFiles, "Invoice");
+      // Under the document's OWN type. A claim's files used to be stored as "PayReq"
+      // attachments, where the claim's detail page could not find them and the guard
+      // that refuses an unattached submission could not count them.
+      if (attachFiles.length) await uploadPicked(isExpense ? "Expense" : "PayReq", docId!, attachFiles, "Invoice");
       if (submitting) await api.put(`payment-requests/${docId}`, { status: "Pending" });
       toast.success(
         status === "Draft" ? "PayReq disimpan draft"
@@ -252,14 +268,18 @@ export default function PaymentRequestCreate() {
             so the screen it is filed on says so once instead of asking every time. */}
         {claimMode ? (
           <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5">
-            <h2 className="text-sm font-semibold text-violet-900 mb-1">Payment Request Reimbursement</h2>
+            <h2 className="text-sm font-semibold text-violet-900 mb-1">Reimbursement Pribadi</h2>
             <p className="text-xs text-violet-800/80 leading-relaxed">
-              Untuk mengganti uang yang sudah Anda talangi sendiri. Tidak berasal dari Purchase Request
+              Untuk mengganti uang yang sudah ditalangi sendiri. Tidak berasal dari Purchase Request
               maupun Purchase Order — rinciannya diisi di bawah dan struknya dilampirkan.
               <span className="block mt-1 text-violet-700/70">
-                Untuk membayar petani lewat KTH, gunakan menu Reimbursement Petani.
+                Untuk membayar petani lewat KTH, pakai Reimbursement Petani — menu yang sama,
+                pilihan lain saat menekan “Buat Pengajuan”.
               </span>
             </p>
+            <div className="mt-4 max-w-xs">
+              <EntityField value={entityId} onChange={setEntityId} disabled={isEdit && !isRevision} />
+            </div>
           </div>
         ) : (
         <div className="bg-white border border-slate-200 rounded-2xl p-6">

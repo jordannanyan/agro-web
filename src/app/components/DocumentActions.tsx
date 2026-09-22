@@ -16,6 +16,9 @@ const ENDPOINT: Record<DocType, string> = {
   PO: "purchase-orders",
   PayReq: "payment-requests",
   Reimbursement: "reimbursements",
+  // An expense claim is a payment_requests row like any other; only its lines and
+  // its screens differ.
+  Expense: "payment-requests",
 };
 
 const EDIT_PATH: Record<DocType, string> = {
@@ -23,6 +26,7 @@ const EDIT_PATH: Record<DocType, string> = {
   PO: "/procurement/po",
   PayReq: "/procurement/payreq",
   Reimbursement: "/reimbursement",
+  Expense: "/reimbursement/pribadi",
 };
 
 /**
