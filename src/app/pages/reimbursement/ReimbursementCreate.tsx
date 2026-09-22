@@ -20,6 +20,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -87,6 +88,8 @@ export default function ReimbursementCreate() {
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [saving, setSaving] = useState(false);
   const [docStatus, setDocStatus] = useState<string | null>(null);
+  const [attachFiles, setAttachFiles] = useState<File[]>([]);
+  const [existingAttachments, setExistingAttachments] = useState(0);
   const isRevision = docStatus === "Revision";
   const loadedOnce = useRef(false);
 
@@ -207,6 +210,16 @@ export default function ReimbursementCreate() {
     ]);
   }
 
+  // Held until the document exists — see components/RequiredAttachments. An edit
+  // does not have to re-upload what is already attached, so the form has to know
+  // whether there is anything there before it decides the rule is unmet.
+  useEffect(() => {
+    if (!id) return;
+    api.get<any[]>(`documents/Reimbursement/${id}/attachments`)
+      .then((rows) => setExistingAttachments((rows || []).length))
+      .catch(() => undefined);
+  }, [id]);
+
   async function submit(status: "Draft" | "Pending" | "keep") {
     if (!kthId) { toast.error("Pilih KTH tujuan"); return; }
     if (kth && !kth.bank_account) {
@@ -218,6 +231,14 @@ export default function ReimbursementCreate() {
       (l) => (l.farmer_name.trim() && !(Number(l.amount) > 0)) || (!l.farmer_name.trim() && Number(l.amount) > 0));
     if (incomplete) { toast.error("Ada baris yang nama penerima atau nominalnya belum lengkap"); return; }
     if (missingOwner) { toast.error("Baris labour loan harus menyebut lahan/pinjaman siapa"); return; }
+    // Submitting means entering the approval chain, which the API refuses without an
+    // attachment. Caught here so nobody meets that refusal after filling in a form
+    // this long. The farmer list says who is owed what; the attachment is what says
+    // the work happened and the KTH agreed — which is what an approver signs for.
+    if (status === "Pending" && !attachFiles.length && !existingAttachments) {
+      toast.error("Lampiran wajib diisi sebelum reimbursement diajukan");
+      return;
+    }
 
     const payload: any = {
       kth_id: Number(kthId),
@@ -243,9 +264,17 @@ export default function ReimbursementCreate() {
     };
     setSaving(true);
     try {
+      // A new document is always created as a Draft when files are waiting: they
+      // cannot be uploaded until it has an id, and the API will not let it leave
+      // Draft until they are there. Saved, uploaded, then submitted — three calls
+      // so the person makes one click.
+      const submitting = status === "Pending";
       const res = isEdit
-        ? await api.put<any>(`reimbursements/${id}`, payload)
-        : await api.post<any>("reimbursements", payload);
+        ? await api.put<any>(`reimbursements/${id}`, { ...payload, ...(submitting ? { status: "Draft" } : {}) })
+        : await api.post<any>("reimbursements", { ...payload, ...(submitting ? { status: "Draft" } : {}) });
+      const docId = isEdit ? id : res.id;
+      if (attachFiles.length) await uploadPicked("Reimbursement", docId!, attachFiles, "Dokumen Pendukung");
+      if (submitting) await api.put(`reimbursements/${docId}`, { status: "Pending" });
       toast.success(
         status === "Draft" ? "Reimbursement disimpan draft"
           : status === "keep" ? "Perubahan revisi disimpan"
@@ -510,11 +539,18 @@ export default function ReimbursementCreate() {
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
             </div>
           </div>
-          <p className="text-[11px] text-slate-400 mt-3">
-            Dokumen pendukung — daftar tanda tangan petani, kuitansi, bukti transfer — dilampirkan
-            di halaman detail setelah dokumen tersimpan, dan boleh beberapa berkas sekaligus.
-          </p>
         </div>
+
+        {/* Dulu cuma catatan yang bilang lampiran diurus belakangan di halaman
+            detail. Sejak lampiran wajib, mengurusnya belakangan berarti dokumennya
+            tidak bisa diajukan — jadi berkasnya dipilih di sini, dan diunggah
+            sendiri begitu dokumennya punya id. */}
+        <RequiredAttachments
+          files={attachFiles}
+          setFiles={setAttachFiles}
+          existingCount={existingAttachments}
+          hint="Lampirkan daftar tanda tangan petani, kuitansi, atau bukti pendukung lain."
+        />
 
         <div className="flex items-center justify-between pb-8">
           <button onClick={() => navigate("/reimbursement")}
