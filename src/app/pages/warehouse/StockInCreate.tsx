@@ -106,12 +106,23 @@ export default function StockInCreate() {
     if (!warehouseId || !date) { toast.error("Gudang & tanggal wajib"); return; }
     const valid = items.filter((it) => it.sapropdi_id && parseFloat(it.received_qty) > 0);
     if (!valid.length) { toast.error("Tambahkan minimal 1 item saprodi dengan qty"); return; }
+    // Memposting berarti angka stok berubah, dan API menolaknya tanpa lampiran.
+    // Dicegat di sini supaya penolakan itu tidak datang setelah formulirnya terisi.
+    if (status !== "Draft" && !noteFiles.length) {
+      toast.error("Surat jalan wajib dilampirkan sebelum penerimaan diposting");
+      return;
+    }
     setSaving(true);
     try {
+      // Selalu disimpan sebagai Draft dulu kalau ada berkas menunggu: lampiran butuh
+      // id, dan API tidak mengizinkan dokumen keluar dari Draft sebelum lampirannya
+      // ada. Simpan, unggah, lalu posting — tiga panggilan untuk satu klik.
+      const posting = status !== "Draft";
       const saved = await api.post<any>("stock-in", {
         purchase_order_id: poId ? Number(poId) : null,
         warehouse_id: Number(warehouseId), stock_in_date: date,
-        delivery_note_no: deliveryNote || null, vehicle_number: vehicle || null, status, notes: notes || null,
+        delivery_note_no: deliveryNote || null, vehicle_number: vehicle || null,
+        status: posting ? "Draft" : status, notes: notes || null,
         items: valid.map((it) => ({ po_item_id: it.po_item_id, sapropdi_id: Number(it.sapropdi_id), received_qty: Number(it.received_qty), item_condition: it.item_condition, remarks: it.remarks || null })),
       });
 
@@ -127,6 +138,7 @@ export default function StockInCreate() {
         if (!row?.id) continue;
         await uploadPicked("StockInItem", row.id, photos, "Foto Barang");
       }
+      if (posting) await api.put(`stock-in/${saved.id}`, { status });
 
       toast.success("Stock In tercatat"); navigate("/warehouse/stock-in");
     } catch (e: any) { toast.error(e?.message || "Gagal menyimpan"); }

@@ -6,6 +6,7 @@ import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { RequiredAttachments } from "../../components/RequiredAttachments";
 
 // The one place goods leave a warehouse. It replaces "Distribusi" under Pre-Finance
 // and "Operational Investment" under Profit Sharing: the scheme is read off the plot
@@ -52,6 +53,10 @@ export default function StockOutCreate() {
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
+  // Berkasnya ikut dalam permintaan yang membuat dokumennya, bukan diunggah
+  // sesudahnya. Stock out tidak punya Draft: begitu tersimpan, barangnya sudah
+  // keluar — jadi tidak ada kesempatan kedua untuk melampirkan buktinya.
+  const [proofFiles, setProofFiles] = useState<File[]>([]);
 
   // Stock is held per warehouse, so balances only mean anything once one is chosen.
   const { data: inventory } = useApi<InvRow[]>(
@@ -103,10 +108,15 @@ export default function StockOutCreate() {
       if (!(parseFloat(l.quantity) > 0)) { toast.error(`${at}: kuantitas harus > 0`); return; }
     }
     if (shortages.length) { toast.error(`Stok tidak cukup: ${shortages[0].name}`); return; }
+    if (!proofFiles.length) { toast.error("Lampiran wajib — barang keluar harus ada buktinya"); return; }
 
     setSaving(true);
     try {
-      await api.post("stock-out", {
+      // Satu permintaan: dokumen dan buktinya berangkat bersama, dan API menulis
+      // keduanya dalam satu transaksi. Tidak ada keadaan di mana barang sudah
+      // tercatat keluar tapi buktinya belum sampai.
+      const form = new FormData();
+      form.append("payload", JSON.stringify({
         warehouse_id: Number(warehouseId),
         stock_out_date: date,
         notes: notes || null,
@@ -117,7 +127,10 @@ export default function StockOutCreate() {
           quantity: Number(l.quantity),
           price_per_unit: l.price_per_unit ? Number(l.price_per_unit) : null,
         })),
-      });
+      }));
+      form.append("category", "Bukti Serah Terima");
+      for (const f of proofFiles) form.append("files", f);
+      await api.upload("stock-out", form);
       toast.success("Stock out tercatat");
       navigate("/warehouse/stock-out");
     } catch (e: any) {
@@ -245,6 +258,13 @@ export default function StockOutCreate() {
             <span className="text-lg font-bold font-mono text-amber-700">{fmtRp(grandTotal)}</span>
           </div>
         </div>
+
+        <RequiredAttachments
+          files={proofFiles}
+          setFiles={setProofFiles}
+          existingCount={0}
+          hint="Wajib. Lampirkan tanda terima, foto serah terima, atau berita acara — barang keluar tanpa bukti tidak bisa diperiksa siapa pun nanti."
+        />
 
         <div className="flex items-center justify-between pb-8">
           <button onClick={() => navigate("/warehouse/stock-out")} className="px-6 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm hover:bg-slate-50">Batal</button>
