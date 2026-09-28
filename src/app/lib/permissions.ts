@@ -165,15 +165,20 @@ export function canApprove(
 /**
  * May this role CHANGE profit sharing — settle a sale, or add an investment line?
  *
- * Not the same question as whether they may see it. Settling writes what a farmer is
- * owed, and an investment line moves the cost side of that same sum: both are
- * decisions about money. The API enforces this too; this only decides whether the
- * buttons appear, so nobody meets a refusal after filling in a form.
+ * Everyone who may open the module, by decision of 2026-09-29. It was briefly the
+ * narrower list (Finance Manager and Director only); the people who record the
+ * costs the figures are built from asked to be able to correct them too.
+ *
+ * Kept as its own function rather than folded into the route rule, because the two
+ * are different questions and have already had different answers once. The API
+ * enforces the real rule; this only decides whether the buttons appear, so nobody
+ * meets a refusal after filling in a form.
  */
 export function canWriteProfitSharing(roleCode: string | null | undefined): boolean {
-  return roleCode === ROLE.FINANCE_MANAGER
-    || roleCode === ROLE.DIRECTOR
-    || roleCode === ROLE.SUPER_ADMIN;
+  return canAccessPath(roleCode, "/profit-sharing")
+    // The Admin reads every operational module and writes to none, so the route
+    // rule alone would say yes where the API says no.
+    && roleCode !== ROLE.ADMIN;
 }
 
 /**
