@@ -105,7 +105,15 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   { prefix: "/warehouse",      roles: [...BUSINESS_CHAIN, ROLE.WAREHOUSE_STAFF] },
   { prefix: "/prefinance",     roles: ABOVE_FIELD_ADMIN },
   { prefix: "/financial",      roles: FINANCE },
-  { prefix: "/profit-sharing", roles: [ROLE.FINANCE_MANAGER, ROLE.DIRECTOR] },
+  // Terbuka untuk seluruh rantai bisnis, bukan cuma Finance dan Direktur. Field
+  // Admin yang mencatat pembelian dan stok yang jadi investasi sebuah lahan, dan
+  // Project Manager yang mempertanggungjawabkan lapangannya, tidak bisa memeriksa
+  // pekerjaannya sendiri lewat halaman yang tidak boleh mereka buka.
+  //
+  // Yang mereka dapat hanya melihat — lihat canWriteProfitSharing() di bawah, dan
+  // penjaga yang sama di API. Procurement ikut lewat BUSINESS_CHAIN; tidak ada
+  // alasan khusus untuk menyisihkan mereka dari angka yang sudah dilihat PM.
+  { prefix: "/profit-sharing", roles: [...BUSINESS_CHAIN, ROLE.FINANCE_STAFF] },
   { prefix: "/map",            roles: BUSINESS_CHAIN },
   { prefix: "/reports",        roles: [...BUSINESS_CHAIN, ROLE.FINANCE_STAFF] },
   // Settings is system administration, not a business-flow area.
@@ -152,6 +160,20 @@ export function canApprove(
   if (!roleCode) return false;
   if (roleCode === ROLE.SUPER_ADMIN) return true; // break-glass, logged as an override
   return !!stepRoleCode && roleCode === stepRoleCode;
+}
+
+/**
+ * May this role CHANGE profit sharing — settle a sale, or add an investment line?
+ *
+ * Not the same question as whether they may see it. Settling writes what a farmer is
+ * owed, and an investment line moves the cost side of that same sum: both are
+ * decisions about money. The API enforces this too; this only decides whether the
+ * buttons appear, so nobody meets a refusal after filling in a form.
+ */
+export function canWriteProfitSharing(roleCode: string | null | undefined): boolean {
+  return roleCode === ROLE.FINANCE_MANAGER
+    || roleCode === ROLE.DIRECTOR
+    || roleCode === ROLE.SUPER_ADMIN;
 }
 
 /**

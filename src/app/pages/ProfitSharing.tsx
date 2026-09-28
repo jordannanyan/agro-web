@@ -7,6 +7,8 @@ import { Button } from "../components/ui/button";
 import { MasterCrud, FieldDef } from "../components/MasterCrud";
 import { api } from "../lib/api";
 import { useApi } from "../lib/hooks";
+import { useAuth } from "../store/AuthContext";
+import { canWriteProfitSharing } from "../lib/permissions";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits: 0 });
@@ -168,6 +170,11 @@ function PLTab() {
 // against the sale they were supposed to describe.
 // -----------------------------------------------------------------------------
 function ShareTab() {
+  const { user } = useAuth();
+  // Melihat perhitungannya terbuka untuk semua; menyimpannya tidak. Pratinjau di
+  // bawah tetap dihitung penuh, jadi PM dan Field Admin bisa memeriksa angkanya
+  // tanpa bisa memutuskannya.
+  const mayWrite = canWriteProfitSharing(user?.role_code);
   const { data: sellings } = useApi<any[]>("selling");
   const { data: shares, refetch } = useApi<any[]>("profit-sharing/shares");
   const [sellingId, setSellingId] = useState("");
@@ -314,13 +321,21 @@ function ShareTab() {
                   <span className="font-mono font-bold text-emerald-700">{fmtRp(totalPayable)}</span>
                 </div>
               </div>
-              <Button
-                className="bg-emerald-500 hover:bg-emerald-600 text-white"
-                disabled={busy || preview.settled || preview.pct_farmer == null}
-                onClick={settle}
-              >
-                {preview.settled ? "Sudah dibagihasilkan" : "Simpan Bagi Hasil"}
-              </Button>
+              {mayWrite ? (
+                <Button
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                  disabled={busy || preview.settled || preview.pct_farmer == null}
+                  onClick={settle}
+                >
+                  {preview.settled ? "Sudah dibagihasilkan" : "Simpan Bagi Hasil"}
+                </Button>
+              ) : (
+                <span className="text-sm text-slate-500">
+                  {preview.settled
+                    ? "Sudah dibagihasilkan"
+                    : "Menunggu Finance Manager atau Direktur untuk menyimpan"}
+                </span>
+              )}
             </div>
           </>
         )}
@@ -366,6 +381,10 @@ function ShareTab() {
 export default function ProfitSharing() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // Field Admin, Project Manager dan Procurement membaca halaman ini; yang mengubah
+  // angkanya tetap Finance Manager dan Direktur. Aturannya sama di API.
+  const mayWrite = canWriteProfitSharing(user?.role_code);
   const activeTab: TabId = PATH_TO_TAB[location.pathname] ?? "investment";
 
   const { data: farmers } = useApi<any[]>("farmers");
@@ -414,7 +433,7 @@ export default function ProfitSharing() {
               </div>
             </div>
           </Card>
-          <Card className="p-6"><MasterCrud endpoint="profit-sharing/investments" title="Investasi Operasional (non-barang)" fields={investmentFields} emptyText="Belum ada investasi" /></Card>
+          <Card className="p-6"><MasterCrud endpoint="profit-sharing/investments" title="Investasi Operasional (non-barang)" fields={investmentFields} readOnly={!mayWrite} emptyText="Belum ada investasi" /></Card>
         </>
       )}
       {activeTab === "revenue" && <RevenueTab />}
