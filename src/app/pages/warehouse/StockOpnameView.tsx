@@ -5,11 +5,17 @@
 // dibaca, selisihnya akan berubah sendiri setiap ada barang masuk, dan sebuah
 // hitungan fisik bulan lalu jadi tidak mengatakan apa-apa.
 
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, ClipboardCheck, CalendarClock, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, CalendarClock, TriangleAlert, Wand2, Lock } from "lucide-react";
+import { toast } from "sonner";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
+import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { useAuth } from "../../store/AuthContext";
+import { canWriteOperations } from "../../lib/permissions";
 import { DocumentAttachments } from "../../components/DocumentAttachments";
 
 const num = (n: number) =>
@@ -25,6 +31,8 @@ interface Line {
   system_qty: number;
   counted_qty: number;
   variance: number;
+  /** Terisi hanya kalau opname ini dipakai untuk menyesuaikan stok. */
+  adjustment: number | null;
   remarks: string | null;
 }
 
@@ -39,6 +47,8 @@ interface Detail {
   line_count: number;
   variance_lines: number;
   variance_total: number;
+  applied_at: string | null;
+  applied_by_name: string | null;
   lines: Line[];
 }
 
@@ -54,7 +64,36 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 export default function StockOpnameView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data, loading, error } = useApi<Detail>(id ? `stock-opname/${id}` : null, undefined, [id]);
+  const { user } = useAuth();
+  const { data, loading, error, refetch } = useApi<Detail>(id ? `stock-opname/${id}` : null, undefined, [id]);
+  const [applying, setApplying] = useState(false);
+
+  const applied = !!data?.applied_at;
+  const mayApply = canWriteOperations(user);
+
+  async function applyStock() {
+    if (!data) return;
+    // Sekali diterapkan, dokumennya tidak bisa diubah atau dihapus lagi, dan angka
+    // stok bersandar padanya. Itu harus disebut sebelum diklik, bukan sesudah.
+    const diff = data.lines.filter((l) => Number(l.variance) !== 0).length;
+    const pesan = [
+      "Sesuaikan stok agar sama dengan hasil hitung fisik?",
+      "",
+      diff + " barang akan berubah angkanya.",
+      "",
+      "Sesudah ini opname tidak bisa diubah atau dihapus lagi, karena angka stok "
+        + "akan bersandar padanya.",
+    ].join(String.fromCharCode(10));
+    if (!confirm(pesan)) return;
+    setApplying(true);
+    try {
+      const r = await api.postRaw(`stock-opname/${data.id}/apply`, {});
+      toast.success(r?.message || "Stok disesuaikan");
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message || "Gagal menyesuaikan stok");
+    } finally { setApplying(false); }
+  }
 
   const th = "text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap";
   const thR = th.replace("text-left", "text-right");
@@ -80,8 +119,12 @@ export default function StockOpnameView() {
           </div>
         </div>
         {data && (
-          <div className="ml-auto">
-            {diff.length === 0 ? (
+          <div className="ml-auto flex items-center gap-3">
+            {applied ? (
+              <Badge className="border bg-sky-50 text-sky-700 border-sky-200">
+                <Lock className="w-3 h-3 mr-1 inline" />Stok sudah disesuaikan
+              </Badge>
+            ) : diff.length === 0 ? (
               <Badge className="border bg-emerald-50 text-emerald-700 border-emerald-200">
                 Catatan &amp; rak cocok
               </Badge>
@@ -89,6 +132,12 @@ export default function StockOpnameView() {
               <Badge className="border bg-amber-50 text-amber-700 border-amber-200">
                 {diff.length} baris berselisih
               </Badge>
+            )}
+            {!applied && diff.length > 0 && mayApply && (
+              <Button className="bg-indigo-500 hover:bg-indigo-600 text-white"
+                onClick={applyStock} disabled={applying}>
+                <Wand2 className="w-4 h-4 mr-2" />{applying ? "Menyesuaikan…" : "Sesuaikan Stok"}
+              </Button>
             )}
           </div>
         )}
@@ -131,16 +180,28 @@ export default function StockOpnameView() {
               tone={total === 0 ? "text-slate-400" : total > 0 ? "text-emerald-700" : "text-red-600"} />
           </div>
 
-          {diff.length > 0 && (
+          {applied ? (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-sky-50 border border-sky-200">
+              <Lock className="w-4 h-4 text-sky-600 mt-0.5 shrink-0" />
+              <p className="text-sm text-sky-800">
+                Hitungan ini <strong>sudah dipakai untuk menyesuaikan stok</strong>
+                {data.applied_by_name ? ` oleh ${data.applied_by_name}` : ""}
+                {data.applied_at ? ` pada ${String(data.applied_at).slice(0, 10)}` : ""}.
+                Kolom Penyesuaian di bawah adalah angka yang benar-benar ditambahkan ke stok.
+                Dokumen ini tidak bisa diubah atau dihapus lagi — angka stok sekarang bersandar padanya.
+              </p>
+            </div>
+          ) : diff.length > 0 ? (
             <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-indigo-50 border border-indigo-200">
               <TriangleAlert className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
               <p className="text-sm text-indigo-800">
-                Selisih di bawah <strong>tidak mengubah angka stok</strong>. Untuk membetulkan catatan,
-                buat Stock In atau Stock Out yang menjelaskan sebabnya — dengan begitu setiap perubahan
-                stok tetap punya dokumen.
+                Selisih di bawah <strong>belum mengubah angka stok</strong>. Pilih
+                {" "}<strong>Sesuaikan Stok</strong> kalau hitungan fisiknya yang benar — catatan akan
+                dibetulkan agar sama, dan penyesuaiannya tetap menunjuk balik ke dokumen ini.
+                Kalau sebab selisihnya sudah diketahui, lebih baik dibetulkan lewat Stock In / Stock Out.
               </p>
             </div>
-          )}
+          ) : null}
 
           <Card className="p-0 overflow-hidden">
             <div className="p-5 border-b border-slate-100">
@@ -158,6 +219,7 @@ export default function StockOpnameView() {
                     <th className={thR}>Sistem</th>
                     <th className={thR}>Fisik</th>
                     <th className={thR}>Selisih</th>
+                    {applied && <th className={thR}>Penyesuaian</th>}
                     <th className={th}>Keterangan</th>
                   </tr>
                 </thead>
@@ -180,6 +242,12 @@ export default function StockOpnameView() {
                           v === 0 ? "text-emerald-600" : v > 0 ? "text-emerald-700" : "text-red-600"}`}>
                           {v > 0 ? "+" : ""}{num(v)}
                         </td>
+                        {applied && (
+                          <td className="py-3 px-4 text-sm text-right font-mono text-sky-700">
+                            {l.adjustment == null ? "—"
+                              : `${Number(l.adjustment) > 0 ? "+" : ""}${num(Number(l.adjustment))}`}
+                          </td>
+                        )}
                         <td className="py-3 px-4 text-sm text-slate-500">{l.remarks || "—"}</td>
                       </tr>
                     );
