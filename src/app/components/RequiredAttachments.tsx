@@ -42,10 +42,19 @@ export function RequiredAttachments({
   setFiles,
   existingCount = 0,
   hint,
+  optional = false,
 }: PickedFiles & {
   /** Attachments the document already has — an edit does not have to re-upload. */
   existingCount?: number;
   hint?: string;
+  /**
+   * Nothing enforces an attachment on this document.
+   *
+   * The picker is the same; only what it claims changes. Saying "wajib" on a form
+   * that saves without one teaches people to disbelieve the word everywhere else
+   * — including on Stock In and Stock Out, where it is true.
+   */
+  optional?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const satisfied = files.length > 0 || existingCount > 0;
@@ -55,17 +64,21 @@ export function RequiredAttachments({
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
-            Lampiran <span className="text-red-500">*</span>
+            Lampiran{optional
+              ? <span className="text-slate-400 normal-case font-normal"> (opsional)</span>
+              : <span className="text-red-500"> *</span>}
           </h2>
           <p className="text-xs text-slate-400 mt-1 max-w-xl">
             {hint || "Wajib diisi sebelum dokumen diajukan — yang menyetujui menandatangani sesuatu, bukan sekadar angka."}
             {" "}Format gambar atau PDF.
           </p>
         </div>
-        <span className={`shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full border ${
-          satisfied ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
-          {satisfied ? "Sudah ada" : "Belum ada"}
-        </span>
+        {!optional && (
+          <span className={`shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full border ${
+            satisfied ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+            {satisfied ? "Sudah ada" : "Belum ada"}
+          </span>
+        )}
       </div>
 
       {existingCount > 0 && (

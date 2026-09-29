@@ -56,6 +56,7 @@ const menuItems = [
       { id: "wh-lines",    label: "Riwayat Barang Keluar", path: "/warehouse/stock-out/riwayat" },
       { id: "wh-card",     label: "Kartu Stok",        path: "/warehouse/stock-card" },
       { id: "wh-reorder",  label: "Reorder Monitoring", path: "/warehouse/reorder" },
+      { id: "wh-opname",   label: "Stok Opname",       path: "/warehouse/opname" },
     ],
   },
   {

@@ -24,6 +24,9 @@ import StockOutCreate from "./pages/warehouse/StockOutCreate";
 import StockOutView from "./pages/warehouse/StockOutView";
 import StockCard from "./pages/warehouse/StockCard";
 import ReorderMonitoring from "./pages/warehouse/ReorderMonitoring";
+import StockOpnameList from "./pages/warehouse/StockOpnameList";
+import StockOpnameCreate from "./pages/warehouse/StockOpnameCreate";
+import StockOpnameView from "./pages/warehouse/StockOpnameView";
 import WarehouseReports from "./pages/warehouse/WarehouseReports";
 import FinanceMain from "./pages/finance/FinanceMain";
 import Reports from "./pages/Reports";
@@ -110,6 +113,11 @@ export const router = createBrowserRouter([
       { path: "warehouse/stockin/:id",         Component: StockInView },
       { path: "warehouse/stock-card",          Component: StockCard },
       { path: "warehouse/reorder",             Component: ReorderMonitoring },
+      // Stok opname: hitung fisik, bandingkan dengan catatan, tanpa menyentuh
+      // angka stok. "create" sebelum ":id", kalau tidak ia dibaca sebagai id.
+      { path: "warehouse/opname",              Component: StockOpnameList },
+      { path: "warehouse/opname/create",       Component: StockOpnameCreate },
+      { path: "warehouse/opname/:id",          Component: StockOpnameView },
       { path: "warehouse/reports",             Component: WarehouseReports },
 
       // ── Transaction Management ────────────────────────────────────────────
