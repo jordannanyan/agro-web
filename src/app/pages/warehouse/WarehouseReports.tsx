@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FileBarChart } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
+import { StockOpnameCell, StockFormulaNote } from "../../components/StockOpnameCell";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
@@ -12,7 +13,7 @@ function InventoryReport() {
     <Card className="p-0">
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Gudang", "Saprodi", "Masuk", "Keluar", "Sisa"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Sisa"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
+          <thead><tr className="bg-slate-50 border-b border-slate-100">{["Gudang", "Saprodi", "Masuk", "Keluar", "Opname", "Sisa"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Opname", "Sisa"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
           <tbody>
             {(data || []).map((r) => (
               <tr key={`${r.warehouse_id}-${r.sapropdi_id}`} className="border-b border-slate-50">
@@ -20,12 +21,14 @@ function InventoryReport() {
                 <td className="py-3 px-5 text-sm font-semibold text-slate-900">{r.sapropdi_name}</td>
                 <td className="py-3 px-5 text-right text-sm font-mono text-emerald-700">{num(r.total_in)}</td>
                 <td className="py-3 px-5 text-right text-sm font-mono text-amber-700">{num(r.total_out)}</td>
+                <td className="py-3 px-5 text-sm"><StockOpnameCell row={r} /></td>
                 <td className="py-3 px-5 text-right text-sm font-mono font-bold text-slate-900">{num(r.remaining)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {(data || []).length > 0 && <StockFormulaNote />}
       {loading && <div className="p-12 text-center text-slate-400 text-sm">Memuat…</div>}
       {!loading && (data || []).length === 0 && <div className="p-12 text-center text-slate-400 text-sm">Belum ada stok</div>}
     </Card>

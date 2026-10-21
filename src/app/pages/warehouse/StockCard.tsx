@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { ArrowLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, ClipboardCheck } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
 import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
@@ -12,6 +12,8 @@ interface Warehouse { id: number; warehouse_name: string; }
 interface CardRow {
   date: string; type: string; ref: string; qty_in: number; qty_out: number; balance: number;
   warehouse_name: string | null; entity_name: string | null;
+  /** Opname rows: the count it came from, and who approved it. */
+  opname_id?: number; note?: string | null;
 }
 
 export default function StockCard() {
@@ -40,7 +42,7 @@ export default function StockCard() {
         <button onClick={() => navigate("/warehouse/stock-list")} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
         <div>
           <h1 className="text-2xl text-slate-900 mb-0.5">Kartu Stok</h1>
-          <p className="text-sm text-slate-500">Riwayat masuk/keluar &amp; saldo berjalan per saprodi</p>
+          <p className="text-sm text-slate-500">Riwayat masuk/keluar, penyesuaian opname yang disetujui PM &amp; saldo berjalan per saprodi</p>
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
       </div>
@@ -71,11 +73,22 @@ export default function StockCard() {
                   {showOrigin && <td className="py-3 px-5"><EntityTag name={r.entity_name} /></td>}
                   {showOrigin && <td className="py-3 px-5 text-sm text-slate-600">{r.warehouse_name || "—"}</td>}
                   <td className="py-3 px-5">
-                    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${r.type === "Stock In" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                      {r.type === "Stock In" ? <ArrowDownCircle className="w-3 h-3" /> : <ArrowUpCircle className="w-3 h-3" />}{r.type}
-                    </span>
+                    {r.type === "Opname" ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">
+                        <ClipboardCheck className="w-3 h-3" />Penyesuaian Opname
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${r.type === "Stock In" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                        {r.type === "Stock In" ? <ArrowDownCircle className="w-3 h-3" /> : <ArrowUpCircle className="w-3 h-3" />}{r.type}
+                      </span>
+                    )}
                   </td>
-                  <td className="py-3 px-5 text-sm font-mono text-slate-600">{r.ref}</td>
+                  <td className="py-3 px-5 text-sm font-mono text-slate-600">
+                    {r.type === "Opname" && r.opname_id ? (
+                      <button onClick={() => navigate(`/warehouse/opname/${r.opname_id}`)} className="text-sky-700 hover:underline">{r.ref}</button>
+                    ) : r.ref}
+                    {r.note && <span className="block text-xs font-sans text-slate-400">{r.note}</span>}
+                  </td>
                   <td className="py-3 px-5 text-right text-sm font-mono text-emerald-700">{r.qty_in ? num(r.qty_in) : "—"}</td>
                   <td className="py-3 px-5 text-right text-sm font-mono text-amber-700">{r.qty_out ? num(r.qty_out) : "—"}</td>
                   <td className="py-3 px-5 text-right text-sm font-mono font-bold text-slate-900">{num(r.balance)}</td>

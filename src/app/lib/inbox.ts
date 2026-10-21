@@ -24,6 +24,8 @@ export interface InboxCounts {
   PO: InboxBucket;
   PayReq: InboxBucket;
   Reimbursement: InboxBucket;
+  /** Stock counts: waiting for the PM's approval, or sent back to the submitter. */
+  StockOpname: InboxBucket;
   total: number;
 }
 
@@ -32,6 +34,7 @@ const EMPTY: InboxCounts = {
   PO: { approval: 0, revision: 0, total: 0 },
   PayReq: { approval: 0, revision: 0, payment: 0, total: 0 },
   Reimbursement: { approval: 0, revision: 0, payment: 0, total: 0 },
+  StockOpname: { approval: 0, revision: 0, total: 0 },
   total: 0,
 };
 

@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/button";
 import { useApi } from "../../lib/hooks";
 import { canWriteOperations } from "../../lib/permissions";
 import { useAuth } from "../../store/AuthContext";
+import { StockOpnameCell, StockFormulaNote } from "../../components/StockOpnameCell";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
@@ -44,7 +45,7 @@ export default function ProcurementStockList() {
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead><tr className="bg-slate-50 border-b border-slate-100">{["Saprodi", "Gudang", "Masuk", "Keluar", "Sisa", "Status"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Sisa"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
+            <thead><tr className="bg-slate-50 border-b border-slate-100">{["Saprodi", "Gudang", "Masuk", "Keluar", "Opname", "Sisa", "Status"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Opname", "Sisa"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
             <tbody>
               {rows.map((r) => {
                 const min = minMap[`${r.warehouse_id}-${r.sapropdi_id}`];
@@ -55,6 +56,7 @@ export default function ProcurementStockList() {
                     <td className="py-3 px-5 text-sm text-slate-600">{r.warehouse_name}</td>
                     <td className="py-3 px-5 text-right text-sm font-mono text-emerald-700">{num(r.total_in)}</td>
                     <td className="py-3 px-5 text-right text-sm font-mono text-amber-700">{num(r.total_out)}</td>
+                    <td className="py-3 px-5 text-sm"><StockOpnameCell row={r} /></td>
                     <td className="py-3 px-5 text-right text-sm font-mono font-bold text-slate-900">{num(r.remaining)}</td>
                     <td className="py-3 px-5">
                       {low ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"><AlertTriangle className="w-3 h-3" />Di bawah min</span>
@@ -66,6 +68,7 @@ export default function ProcurementStockList() {
             </tbody>
           </table>
         </div>
+        {rows.length > 0 && <StockFormulaNote />}
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
         {!loading && rows.length === 0 && <div className="p-16 text-center"><Package className="w-12 h-12 text-slate-300 mx-auto mb-4" /><p className="text-slate-500 font-medium">Belum ada stok saprodi</p></div>}
       </Card>

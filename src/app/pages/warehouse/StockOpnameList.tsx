@@ -33,15 +33,25 @@ interface Row {
   line_count: number;
   variance_lines: number;
   variance_total: number;
+  approval_status: "Draft" | "Pending" | "Approved" | "Rejected";
 }
+
+const STATUS: Record<Row["approval_status"], { label: string; cls: string }> = {
+  Draft:    { label: "Dicatat", cls: "bg-slate-100 text-slate-700 border-slate-200" },
+  Pending:  { label: "Menunggu PM", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  Approved: { label: "Disesuaikan", cls: "bg-sky-50 text-sky-700 border-sky-200" },
+  Rejected: { label: "Ditolak PM", cls: "bg-red-50 text-red-700 border-red-200" },
+};
 
 export default function StockOpnameList() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [warehouseId, setWarehouseId] = useState("");
+  const [status, setStatus] = useState("");
   const { data: warehouses } = useApi<Warehouse[]>("warehouses");
-  const { data, loading, error } = useApi<Row[]>(
-    "stock-opname", warehouseId ? { warehouse_id: warehouseId } : undefined, [warehouseId]);
+  const { data, loading, error } = useApi<Row[]>("stock-opname", {
+    warehouse_id: warehouseId || undefined, approval_status: status || undefined,
+  }, [warehouseId, status]);
 
   const bound = isEntityBound(user);
   const mayWrite = canWriteOperations(user);
@@ -65,6 +75,13 @@ export default function StockOpnameList() {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
+            <option value="">Semua status</option>
+            <option value="Pending">Menunggu PM</option>
+            <option value="Draft">Dicatat</option>
+            <option value="Rejected">Ditolak PM</option>
+            <option value="Approved">Disesuaikan</option>
+          </select>
           <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={selectCls}>
             <option value="">Semua gudang</option>
             {(warehouses || []).map((w) => (
@@ -85,9 +102,10 @@ export default function StockOpnameList() {
       <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-indigo-50 border border-indigo-200">
         <TriangleAlert className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
         <p className="text-sm text-indigo-800">
-          Opname <strong>mencatat selisih</strong>, tidak mengubah angka stok. Stok hanya bergerak lewat
-          Stock In dan Stock Out, supaya setiap perubahannya punya dokumen yang menjelaskan.
-          Selisih yang ketemu di sini ditindaklanjuti lewat dokumen itu.
+          Opname <strong>mencatat selisih</strong>, tidak langsung mengubah angka stok. Kalau hitungan fisiknya
+          yang benar, ajukan penyesuaian — stok baru dibetulkan setelah <strong>Project Manager</strong> PT
+          pemilik gudang menyetujuinya, dan penyesuaian itu tampil di Inventory &amp; Kartu Stok sebagai
+          baris Opname.
         </p>
       </div>
 
@@ -113,6 +131,7 @@ export default function StockOpnameList() {
                   <th className={thR}>Baris</th>
                   <th className={thR}>Selisih</th>
                   <th className={thR}>Total Selisih</th>
+                  <th className={th}>Status</th>
                   <th className={thR} />
                 </tr>
               </thead>
@@ -153,6 +172,11 @@ export default function StockOpnameList() {
                       <td className={`py-4 px-4 text-sm text-right font-mono font-semibold ${
                         total === 0 ? "text-slate-400" : total > 0 ? "text-emerald-700" : "text-red-600"}`}>
                         {total > 0 ? "+" : ""}{num(total)}
+                      </td>
+                      <td className="py-4 px-4">
+                        <Badge className={`border ${STATUS[r.approval_status || "Draft"].cls}`}>
+                          {STATUS[r.approval_status || "Draft"].label}
+                        </Badge>
                       </td>
                       <td className="py-4 px-4 text-right">
                         <ArrowRight className="w-4 h-4 text-slate-300 inline" />

@@ -123,11 +123,12 @@ const INBOX_PATHS: Record<string, keyof Omit<InboxCounts, "total">> = {
   "/procurement/purchase-order": "PO",
   "/procurement/payment-request": "PayReq",
   "/reimbursement": "Reimbursement",
+  "/warehouse/opname": "StockOpname",
 };
 
 /** Spell out what the number is made of, for the badge's tooltip. */
 function inboxTitle(counts: InboxCounts, key?: keyof Omit<InboxCounts, "total">): string {
-  const b = key ? counts[key] : null;
+  const b = key ? counts[key] ?? null : null;
   const parts = b
     ? [
         b.approval ? `${b.approval} menunggu persetujuan Anda` : null,
@@ -254,7 +255,7 @@ export default function DashboardLayout() {
               // worse than none. It stays on show while the menu is expanded so
               // the total is readable either way.
               const groupCount = hasSubItems
-                ? item.subItems!.reduce((n, s) => n + (INBOX_PATHS[s.path] ? inbox[INBOX_PATHS[s.path]].total : 0), 0)
+                ? item.subItems!.reduce((n, s) => n + (INBOX_PATHS[s.path] ? (inbox[INBOX_PATHS[s.path]]?.total ?? 0) : 0), 0)
                 : 0;
 
               if (hasSubItems) {
@@ -284,7 +285,7 @@ export default function DashboardLayout() {
                         {item.subItems.map((subItem) => {
                           const isSubActive = location.pathname === subItem.path;
                           const key = INBOX_PATHS[subItem.path];
-                          const count = key ? inbox[key].total : 0;
+                          const count = key ? (inbox[key]?.total ?? 0) : 0;
                           return (
                             <li key={subItem.id}>
                               <Link

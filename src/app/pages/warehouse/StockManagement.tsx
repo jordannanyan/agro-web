@@ -8,11 +8,12 @@ import { useApi } from "../../lib/hooks";
 import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
 import { usePagedApi, Pagination } from "../../components/Pagination";
 import { canWriteOperations } from "../../lib/permissions";
+import { StockOpnameCell, StockFormulaNote, type OpnameInfo } from "../../components/StockOpnameCell";
 import { useAuth } from "../../store/AuthContext";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
-interface InvRow { warehouse_id: number; warehouse_name: string; sapropdi_id: number; sapropdi_name: string; unit_name: string | null; total_in: number; total_out: number; remaining: number; entity_name: string | null; }
+interface InvRow extends OpnameInfo { warehouse_id: number; warehouse_name: string; sapropdi_id: number; sapropdi_name: string; unit_name: string | null; total_in: number; total_out: number; remaining: number; entity_name: string | null; }
 interface StockInRow { id: number; stock_in_number: string; stock_in_date: string; warehouse_name: string; po_number: string | null; status: string; entity_name: string | null; }
 interface Warehouse { id: number; warehouse_name: string; }
 
@@ -47,7 +48,7 @@ export default function StockManagement() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl text-slate-900 mb-1">{isStockIn ? "Stock In" : "Inventory Saprodi"}</h1>
-          <p className="text-sm text-slate-500">{isStockIn ? "Penerimaan barang dari Purchase Order" : "Stok saprodi terhitung (Stock In − Distribusi)"}</p>
+          <p className="text-sm text-slate-500">{isStockIn ? "Penerimaan barang dari Purchase Order" : "Stok saprodi terhitung (Stock In − Distribusi ± Opname yang disetujui PM)"}</p>
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
         {mayWrite && (
@@ -76,7 +77,7 @@ export default function StockManagement() {
               <thead><tr className="bg-slate-50 border-b border-slate-100">
                 {/* Satuan sits beside the quantities: "40" on its own is a number
                     nobody can act on — 40 sacks, 40 kilos, 40 litres? */}
-                {[...(bound ? [] : ["Entitas"]), "Gudang", "Saprodi", "Satuan", "Total Masuk", "Total Keluar", "Sisa Stok"].map((h) => <th key={h} className={`${["Total Masuk", "Total Keluar", "Sisa Stok"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
+                {[...(bound ? [] : ["Entitas"]), "Gudang", "Saprodi", "Satuan", "Total Masuk", "Total Keluar", "Opname", "Sisa Stok"].map((h) => <th key={h} className={`${["Total Masuk", "Total Keluar", "Opname", "Sisa Stok"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {invList.map((r) => (
@@ -87,11 +88,13 @@ export default function StockManagement() {
                     <td className="py-3 px-5 text-sm text-slate-500">{r.unit_name || "—"}</td>
                     <td className="py-3 px-5 text-right text-sm font-mono text-emerald-700">{num(r.total_in)}</td>
                     <td className="py-3 px-5 text-right text-sm font-mono text-amber-700">{num(r.total_out)}</td>
+                    <td className="py-3 px-5 text-sm"><StockOpnameCell row={r} /></td>
                     <td className="py-3 px-5 text-right text-sm font-mono font-bold text-slate-900">{num(r.remaining)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {invList.length > 0 && <StockFormulaNote />}
             {invLoading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
             {!invLoading && invList.length === 0 && <div className="p-16 text-center"><Boxes className="w-12 h-12 text-slate-300 mx-auto mb-4" /><p className="text-slate-500 font-medium">Belum ada stok</p><p className="text-sm text-slate-400 mt-1">Stok muncul setelah ada Stock In</p></div>}
           </div>
