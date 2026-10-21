@@ -181,7 +181,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
       if (isEdit) await api.put(`purchasing/${editRow!.id}`, payload);
       else await api.post("purchasing", payload);
       toast.success(isEdit ? "Pembelian diperbarui" : "Pembelian tercatat");
-      if (isPF && !manual && preview?.applies && !preview.rate && !keepsExisting) {
+      if (isPF && !manual && preview?.applies && !preview.rate && !keepsExisting && repayLines.length > 0) {
         toast.warning("Plot ini belum punya tarif potongan — tidak ada cicilan yang dipotong.");
       }
       onSaved(); onClose();
@@ -317,7 +317,15 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
                 )}
               </div>
 
-              {preview?.applies && !preview.rate && (
+              {/* Nothing owed means nothing to deduct, whatever the rate says — the
+                  lines below only appear for a type with debt left on it. */}
+              {preview?.applies && repayLines.length === 0 && (
+                <div className="flex items-start gap-2 text-xs text-slate-600">
+                  <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  Petani ini tidak punya utang Pre-Finance yang tercatat — tidak ada yang dipotong dari setoran ini.
+                </div>
+              )}
+              {preview?.applies && !preview.rate && repayLines.length > 0 && (
                 <div className="flex items-start gap-2 text-xs text-amber-800">
                   <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                   Plot ini belum punya tarif potongan (Pre-Finance → Tarif Potongan). Isi manual bila setoran ini memang dipotong.
