@@ -37,6 +37,7 @@ import Installment from "./pages/prefinance/Installment";
 import InstallmentCreate from "./pages/prefinance/InstallmentCreate";
 import OutstandingFarmer from "./pages/prefinance/OutstandingFarmer";
 import Distribution from "./pages/prefinance/Distribution";
+import PaybackRates from "./pages/prefinance/PaybackRates";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import ProfitSharingPage from "./pages/ProfitSharing";
@@ -129,6 +130,7 @@ export const router = createBrowserRouter([
       { path: "prefinance/installment",        Component: Installment },
       { path: "prefinance/installment/create", Component: InstallmentCreate },
       { path: "prefinance/outstanding",        Component: OutstandingFarmer },
+      { path: "prefinance/payback-rates",      Component: PaybackRates },
 
       // ── Finance sub-pages ─────────────────────────────────────────────────
       { path: "financial",                     Component: FinanceMain },

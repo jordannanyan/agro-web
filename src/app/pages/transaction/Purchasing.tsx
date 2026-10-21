@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Plus, Search, Trash2, Pencil, X, Save, Leaf, Info } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Search, Trash2, Pencil, X, Save, Leaf, Info, AlertTriangle, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -29,6 +29,10 @@ interface PurchasingRow {
   quantity: number;
   price_per_unit: number;
   total_value: number;
+  // Loan repayment deducted from this delivery (pre-finance) and what was left
+  // for the farmer — computed by the API.
+  repayment_total: number;
+  net_payment: number;
   payment_status: "paid" | "unpaid";
   plot?: { id: number; plot_name: string } | null;
   farmer?: { id: number; farmer_name: string } | null;
@@ -53,6 +57,16 @@ function SchemeBadge({ scheme }: { scheme: Scheme }) {
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
+// What the API would deduct for a delivery (GET pre-finance/payback-rates/preview).
+interface RepayLine { pre_finance_type_id: number; type_name: string; per_kg: number; computed: number; outstanding: number; amount: number; }
+interface RepayPreview {
+  applies: boolean;
+  rate: { effective_date: string; full_price: number | null; saprodi_per_kg: number; labor_per_kg: number; grade_name: string | null } | null;
+  lines: RepayLine[];
+  total: number;
+  capped: boolean;
+}
+
 // ── Create Modal ──────────────────────────────────────────────────────────────
 function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collectors, warehouses, editRow }: {
   onClose: () => void; onSaved: () => void;
@@ -74,6 +88,26 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   const [paid, setPaid] = useState<"paid" | "unpaid">(editRow?.payment_status ?? "unpaid");
   const [saving, setSaving] = useState(false);
 
+  // ── Loan repayment (pre-finance) ──
+  // Left alone, the server deducts kilos × the plot's payback rate. The amounts
+  // are sent only when someone typed them, so an untouched form and the mobile
+  // app book exactly the same thing.
+  const [preview, setPreview] = useState<RepayPreview | null>(null);
+  const [manual, setManual] = useState<Record<number, number> | null>(null);
+  const [existing, setExisting] = useState<Record<number, number> | null>(null);
+  const [forceAuto, setForceAuto] = useState(false);
+  const driversKey = `${plotId}|${gradeId}|${date}|${Number(quantity) || 0}`;
+  const [initialKey] = useState(driversKey);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    api.get<any>(`purchasing/${editRow!.id}`).then((d) => {
+      const m: Record<number, number> = {};
+      (d?.repayment || []).forEach((l: any) => { m[l.pre_finance_type_id] = Number(l.amount); });
+      setExisting(m);
+    }).catch(() => setExisting({}));
+  }, [isEdit, editRow]);
+
   // farmers derived from plots
   const farmers = useMemo(() => {
     const m = new Map<number, string>();
@@ -86,6 +120,36 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   const isPS = scheme === "ProfitSharing";
   const priceNum = isPS ? 0 : (parseFloat(price) || 0);
   const total = (parseFloat(quantity) || 0) * priceNum;
+  const isPF = scheme === "PreFinance";
+
+  useEffect(() => {
+    if (!isPF || !plotId || !date || !(Number(quantity) > 0)) { setPreview(null); return; }
+    const t = setTimeout(() => {
+      api.get<RepayPreview>("pre-finance/payback-rates/preview", {
+        plot_id: plotId, grade_id: gradeId || undefined, date, quantity,
+        purchasing_id: isEdit ? editRow!.id : undefined,
+      }).then(setPreview).catch(() => setPreview(null));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [isPF, plotId, gradeId, date, quantity, isEdit, editRow]);
+
+  // An edit that leaves plot, grade, date and kilos alone keeps the deduction it
+  // has; change any of them and the server recomputes it from the rate.
+  const keepsExisting = isEdit && !forceAuto && driversKey === initialKey && existing !== null;
+  const repayAmount = (l: RepayLine) =>
+    manual ? (manual[l.pre_finance_type_id] ?? 0) : keepsExisting ? (existing![l.pre_finance_type_id] ?? 0) : l.amount;
+  const repayLines = (preview?.applies ? preview.lines : []).filter(
+    (l) => l.per_kg > 0 || l.outstanding > 0 || repayAmount(l) > 0);
+  const repayTotal = repayLines.reduce((sum, l) => sum + repayAmount(l), 0);
+  const repayOver = repayLines.some((l) => repayAmount(l) > Math.max(0, l.outstanding) + 0.5);
+  const ratePerKg = preview?.rate ? Number(preview.rate.saprodi_per_kg) + Number(preview.rate.labor_per_kg) : 0;
+  const rateFinal = preview?.rate?.full_price != null ? Number(preview.rate.full_price) - ratePerKg : null;
+
+  function setRepay(typeId: number, v: number) {
+    const base: Record<number, number> = {};
+    repayLines.forEach((l) => { base[l.pre_finance_type_id] = repayAmount(l); });
+    setManual({ ...base, ...(manual || {}), [typeId]: v });
+  }
 
   const selectCls = "w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-slate-50";
 
@@ -93,6 +157,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     if (!commodityId || !date || !quantity) { toast.error("Komoditas, tanggal, dan qty wajib diisi"); return; }
     if (supplierType === "farmer" && !plotId) { toast.error("Pilih plot petani"); return; }
     if (supplierType === "collector" && !collectorId) { toast.error("Pilih collector"); return; }
+    if (isPF && repayOver) { toast.error("Potongan cicilan melebihi sisa utang petani"); return; }
     const payload: any = {
       supplier_type: supplierType,
       commodities_id: Number(commodityId),
@@ -106,11 +171,19 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     };
     if (supplierType === "farmer") payload.plot_id = Number(plotId);
     else payload.collector_id = Number(collectorId);
+    if (isPF && manual) {
+      payload.repayment = repayLines.map((l) => ({ pre_finance_type_id: l.pre_finance_type_id, amount: repayAmount(l) }));
+    } else if (isPF && forceAuto) {
+      payload.repayment = "auto";
+    }
     setSaving(true);
     try {
       if (isEdit) await api.put(`purchasing/${editRow!.id}`, payload);
       else await api.post("purchasing", payload);
       toast.success(isEdit ? "Pembelian diperbarui" : "Pembelian tercatat");
+      if (isPF && !manual && preview?.applies && !preview.rate && !keepsExisting) {
+        toast.warning("Plot ini belum punya tarif potongan — tidak ada cicilan yang dipotong.");
+      }
       onSaved(); onClose();
     } catch (e: any) {
       toast.error(e?.message || "Gagal menyimpan");
@@ -215,10 +288,66 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
               <Input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
             </div>
             <div>
-              <Label className="text-xs text-slate-600 mb-1.5 block">Harga / Kg</Label>
+              <Label className="text-xs text-slate-600 mb-1.5 block">Harga / Kg{isPF ? " (harga final)" : ""}</Label>
               <Input type="number" value={isPS ? "0" : price} onChange={(e) => setPrice(e.target.value)} disabled={isPS} placeholder="0" />
+              {isPF && rateFinal != null && Number(price) !== rateFinal && (
+                <button type="button" onClick={() => setPrice(String(rateFinal))} className="mt-1 text-xs text-amber-700 hover:underline">
+                  Harga final menurut tarif: {fmtRp(rateFinal)} — pakai
+                </button>
+              )}
             </div>
           </div>
+
+          {isPF && plotId && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Potongan Cicilan Utang</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {preview?.rate
+                      ? <>Tarif sejak {String(preview.rate.effective_date).slice(0, 10)}{preview.rate.grade_name ? ` (grade ${preview.rate.grade_name})` : ""}: {fmtRp(ratePerKg)}/kg</>
+                      : "Kuantitas × tarif potongan plot — tercatat otomatis sebagai cicilan"}
+                  </p>
+                </div>
+                {(manual || keepsExisting) && preview?.applies && (
+                  <button type="button" onClick={() => { setManual(null); setForceAuto(true); }}
+                    className="flex items-center gap-1 text-xs text-amber-700 hover:underline whitespace-nowrap">
+                    <RotateCcw className="w-3 h-3" />Hitung dari tarif
+                  </button>
+                )}
+              </div>
+
+              {preview?.applies && !preview.rate && (
+                <div className="flex items-start gap-2 text-xs text-amber-800">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  Plot ini belum punya tarif potongan (Pre-Finance → Tarif Potongan). Isi manual bila setoran ini memang dipotong.
+                </div>
+              )}
+
+              {repayLines.map((l) => {
+                const val = repayAmount(l);
+                const over = val > Math.max(0, l.outstanding) + 0.5;
+                return (
+                  <div key={l.pre_finance_type_id}>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-xs text-slate-600">
+                        {l.type_name}{l.per_kg > 0 ? ` · ${fmtRp(l.per_kg)}/kg` : ""}
+                      </Label>
+                      <span className="text-xs text-slate-400">Sisa utang: {fmtRp(l.outstanding)}</span>
+                    </div>
+                    <Input type="number" value={val ? String(val) : ""} placeholder="0"
+                      onChange={(e) => setRepay(l.pre_finance_type_id, Number(e.target.value) || 0)}
+                      className={over ? "border-red-300 bg-red-50" : ""} />
+                    {over && <p className="text-xs text-red-600 mt-1">Melebihi sisa utang</p>}
+                    {!manual && !keepsExisting && l.amount < l.computed && (
+                      <p className="text-xs text-amber-700 mt-1">Dibatasi sisa utang (tarif: {fmtRp(l.computed)})</p>
+                    )}
+                  </div>
+                );
+              })}
+              {!preview && <p className="text-xs text-slate-400">Isi tanggal dan kuantitas untuk menghitung potongan.</p>}
+            </div>
+          )}
 
           {isPS && (
             <div className="flex items-start gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl">
@@ -241,9 +370,23 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
             </div>
           </div>
 
-          <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-900 text-white">
-            <span className="text-sm font-medium">Total Pembelian</span>
-            <span className="text-lg font-bold tabular-nums">{fmtRp(total)}</span>
+          <div className="px-4 py-3 rounded-xl bg-slate-900 text-white space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Total Pembelian</span>
+              <span className="text-lg font-bold tabular-nums">{fmtRp(total)}</span>
+            </div>
+            {isPF && repayTotal > 0 && (
+              <>
+                <div className="flex items-center justify-between text-sm text-slate-300">
+                  <span>Potongan cicilan</span>
+                  <span className="tabular-nums">− {fmtRp(repayTotal)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-white/20 pt-1">
+                  <span className="text-sm font-medium">Dibayar ke petani</span>
+                  <span className="text-lg font-bold tabular-nums">{fmtRp(total - repayTotal)}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -285,6 +428,7 @@ export default function Purchasing() {
   // them over the same query that produced the rows.
   const totalQty = Number((meta as any)?.totals?.quantity ?? 0);
   const totalValue = Number((meta as any)?.totals?.total_value ?? 0);
+  const totalRepay = Number((meta as any)?.totals?.repayment_total ?? 0);
 
   async function remove(id: number) {
     if (!confirm("Hapus data pembelian ini?")) return;
@@ -315,11 +459,12 @@ export default function Purchasing() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {[
           { label: "Total Transaksi", value: (meta?.total ?? list.length).toLocaleString("id-ID"), color: "text-slate-900" },
           { label: "Total Volume (Kg)", value: totalQty.toLocaleString("id-ID"), color: "text-blue-700" },
           { label: "Total Nilai", value: fmtRp(totalValue), color: "text-emerald-700" },
+          { label: "Potongan Cicilan", value: fmtRp(totalRepay), color: "text-amber-700" },
         ].map((s) => (
           <Card key={s.label} className="p-5">
             <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">{s.label}</p>
@@ -351,8 +496,8 @@ export default function Purchasing() {
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                {["Tanggal", "Invoice", "Skema", "Supplier", "Komoditas", "Grade", "Qty (Kg)", "Harga/Kg", "Total", "Bayar", ""].map((h) => (
-                  <th key={h} className={`${["Qty (Kg)", "Harga/Kg", "Total"].includes(h) ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
+                {["Tanggal", "Invoice", "Skema", "Supplier", "Komoditas", "Grade", "Qty (Kg)", "Harga/Kg", "Total", "Potongan", "Bayar", ""].map((h) => (
+                  <th key={h} className={`${["Qty (Kg)", "Harga/Kg", "Total", "Potongan"].includes(h) ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -371,6 +516,9 @@ export default function Purchasing() {
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{Number(r.quantity).toLocaleString("id-ID")}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(r.price_per_unit)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-slate-900">{fmtRp(r.total_value)}</td>
+                  <td className="py-3 px-4 text-right text-sm font-mono text-amber-700" title={Number(r.repayment_total) > 0 ? `Dibayar ke petani: ${fmtRp(r.net_payment)}` : undefined}>
+                    {Number(r.repayment_total) > 0 ? fmtRp(r.repayment_total) : "—"}
+                  </td>
                   <td className="py-3 px-4">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${r.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
                       {r.payment_status === "paid" ? "Paid" : "Unpaid"}

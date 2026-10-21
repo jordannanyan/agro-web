@@ -8,6 +8,7 @@ import { Input } from "../../components/ui/input";
 import { Badge } from "../../components/ui/badge";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { usePagedApi, Pagination } from "../../components/Pagination";
 import { canWriteOperations } from "../../lib/permissions";
 import { useAuth } from "../../store/AuthContext";
 
@@ -16,6 +17,9 @@ const formatRp = (val: number) => `Rp ${new Intl.NumberFormat("id-ID").format(Nu
 interface InstallmentRow {
   id: number; date: string; farmer_id: number; farmer_name: string;
   method_name: string | null; reference_no: string | null; total_payment: number;
+  // 'delivery' = deducted from a purchasing (booked there); 'cash' = paid outside one.
+  source: "delivery" | "cash"; purchasing_id: number | null;
+  purchasing_invoice: string | null; purchasing_quantity: number | null; purchasing_plot_name: string | null;
 }
 interface OutstandingRow {
   farmer_id: number; farmer_name: string; pre_finance_type_id: number; type_name: string;
@@ -33,15 +37,16 @@ function typeBadge(type: string) {
 }
 
 // ── Tab: Cicilan ──────────────────────────────────────────────────────────────
-function TabCicilan() {
+function TabCicilan({ mayWrite }: { mayWrite: boolean }) {
   const navigate = useNavigate();
-  const { data, loading, error, refetch } = useApi<InstallmentRow[]>("pre-finance/installments");
   const [search, setSearch] = useState("");
-
-  const filtered = (data || []).filter((i) =>
-    search === "" || i.farmer_name?.toLowerCase().includes(search.toLowerCase()) || (i.reference_no ?? "").toLowerCase().includes(search.toLowerCase())
-  );
-  const total = filtered.reduce((s, i) => s + Number(i.total_payment || 0), 0);
+  const [source, setSource] = useState<"" | "delivery" | "cash">("");
+  // Every pre-finance delivery now books one, so this pages like Purchasing does.
+  const { rows: filtered, meta, page, setPage, perPage, setPerPage, loading, error, refetch } =
+    usePagedApi<InstallmentRow>("pre-finance/installments", {
+      search: search || undefined, source: source || undefined,
+    }, [search, source]);
+  const total = Number((meta as any)?.totals?.total_payment ?? 0);
 
   async function remove(id: number) {
     if (!confirm("Hapus cicilan ini?")) return;
@@ -57,13 +62,24 @@ function TabCicilan() {
             <p className="text-xs text-slate-500 mb-1.5 font-medium">Cari</p>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input placeholder="Petani, no. referensi…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input placeholder="Petani, no. referensi / nota…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
+          <div>
+            <p className="text-xs text-slate-500 mb-1.5 font-medium">Sumber</p>
+            <select value={source} onChange={(e) => setSource(e.target.value as any)}
+              className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <option value="">Semua</option>
+              <option value="delivery">Potongan setoran</option>
+              <option value="cash">Pembayaran tunai</option>
+            </select>
+          </div>
           <div className="flex-1" />
-          <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/prefinance/installment/create")}>
-            <Plus className="w-4 h-4 mr-2" />Tambah Cicilan
-          </Button>
+          {mayWrite && (
+            <Button variant="outline" onClick={() => navigate("/prefinance/installment/create")}>
+              <Plus className="w-4 h-4 mr-2" />Pembayaran Tunai
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -75,6 +91,7 @@ function TabCicilan() {
                 <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide w-8">#</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">Tanggal</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-emerald-600 uppercase tracking-wide">Petani</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">Sumber</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">Metode</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">Referensi</th>
                 <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">Total</th>
@@ -84,15 +101,30 @@ function TabCicilan() {
             <tbody>
               {filtered.map((item, idx) => (
                 <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
-                  <td className="py-4 px-4 text-sm text-slate-400">{idx + 1}</td>
+                  <td className="py-4 px-4 text-sm text-slate-400">{(page - 1) * perPage + idx + 1}</td>
                   <td className="py-4 px-4 text-sm text-slate-700 whitespace-nowrap">{item.date}</td>
                   <td className="py-4 px-4 text-sm font-medium text-slate-900">{item.farmer_name}</td>
+                  <td className="py-4 px-4 text-sm">
+                    {item.source === "delivery" ? (
+                      <>
+                        <Badge className="border text-xs bg-amber-50 text-amber-700 border-amber-200">Potongan setoran</Badge>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {item.purchasing_plot_name} · {Number(item.purchasing_quantity || 0).toLocaleString("id-ID")} kg
+                        </p>
+                      </>
+                    ) : (
+                      <Badge className="border text-xs bg-slate-100 text-slate-600 border-slate-200">Tunai</Badge>
+                    )}
+                  </td>
                   <td className="py-4 px-4 text-sm text-slate-600">{item.method_name || "—"}</td>
                   <td className="py-4 px-4 text-sm font-mono text-slate-600">{item.reference_no || "—"}</td>
                   <td className="py-4 px-4 text-right text-sm font-mono font-semibold text-slate-900">{formatRp(item.total_payment)}</td>
                   <td className="py-4 px-4">
                     <div className="flex items-center justify-end gap-1">
-                      <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => remove(item.id)}><Trash2 className="w-4 h-4" /></Button>
+                      {/* A delivery's deduction is changed on the delivery (Purchasing). */}
+                      {mayWrite && item.source === "cash" && (
+                        <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => remove(item.id)}><Trash2 className="w-4 h-4" /></Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -101,7 +133,7 @@ function TabCicilan() {
             {filtered.length > 0 && (
               <tfoot>
                 <tr className="bg-slate-50 border-t border-slate-200">
-                  <td colSpan={5} className="py-3 px-4 text-sm font-semibold text-slate-700 text-right">Total</td>
+                  <td colSpan={6} className="py-3 px-4 text-sm font-semibold text-slate-700 text-right">Total</td>
                   <td className="py-3 px-4 text-right text-sm font-mono font-bold text-emerald-600">{formatRp(total)}</td>
                   <td />
                 </tr>
@@ -109,6 +141,7 @@ function TabCicilan() {
             )}
           </table>
         </div>
+        <Pagination meta={meta} page={page} onPage={setPage} perPage={perPage} onPerPage={setPerPage} />
 
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
         {error && !loading && <div className="p-16 text-center text-red-500 text-sm">{error}</div>}
@@ -116,7 +149,7 @@ function TabCicilan() {
           <div className="p-16 text-center">
             <CreditCard className="w-12 h-12 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-500 font-medium">Belum ada cicilan</p>
-            <p className="text-sm text-slate-400 mt-1">Klik "Tambah Cicilan" untuk mencatat pembayaran</p>
+            <p className="text-sm text-slate-400 mt-1">Potongan tercatat otomatis saat setoran petani Pre-Finance diinput di Purchasing</p>
           </div>
         )}
       </Card>
@@ -207,7 +240,6 @@ function TabOutstanding() {
 }
 
 export default function Installment() {
-  const navigate = useNavigate();
   const mayWrite = canWriteOperations(useAuth().user);
   const [activeTab, setActiveTab] = useState<"cicilan" | "outstanding">("cicilan");
 
@@ -216,13 +248,11 @@ export default function Installment() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl text-slate-900 mb-1">Pre-Finance — Cicilan (Installment)</h1>
-          <p className="text-sm text-slate-500">Pembayaran cicilan utang petani, breakdown per tipe.</p>
+          <p className="text-sm text-slate-500">
+            Cicilan utang petani. Potongan dari setoran tercatat lewat Purchasing (kg × tarif potongan);
+            di sini hanya pembayaran tunai di luar setoran yang ditambahkan.
+          </p>
         </div>
-        {mayWrite && (
-          <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => navigate("/prefinance/installment/create")}>
-            <Plus className="w-4 h-4 mr-2" />Tambah Cicilan
-          </Button>
-        )}
       </div>
 
       <div className="border-b border-slate-200">
@@ -236,7 +266,7 @@ export default function Installment() {
         </div>
       </div>
 
-      {activeTab === "cicilan" ? <TabCicilan /> : <TabOutstanding />}
+      {activeTab === "cicilan" ? <TabCicilan mayWrite={mayWrite} /> : <TabOutstanding />}
     </div>
   );
 }

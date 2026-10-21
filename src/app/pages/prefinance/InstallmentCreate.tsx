@@ -67,7 +67,7 @@ export default function InstallmentCreate() {
     setSaving(true);
     try {
       await api.upload("pre-finance/installments", form);
-      toast.success("Cicilan tersimpan");
+      toast.success("Pembayaran tersimpan");
       navigate("/prefinance/installment");
     } catch (e: any) {
       toast.error(e?.message || "Gagal menyimpan cicilan");
@@ -86,14 +86,21 @@ export default function InstallmentCreate() {
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center"><CreditCard className="w-4 h-4 text-white" /></div>
             <div>
-              <h1 className="text-slate-900 font-semibold text-lg">Tambah Cicilan</h1>
-              <p className="text-slate-500 text-sm">Pre-Finance → Cicilan (breakdown per tipe)</p>
+              <h1 className="text-slate-900 font-semibold text-lg">Pembayaran Tunai</h1>
+              <p className="text-slate-500 text-sm">Cicilan utang yang dibayar di luar setoran</p>
             </div>
           </div>
         </div>
       </div>
 
       <div className="px-8 py-6 max-w-3xl mx-auto space-y-6">
+        {/* A deduction from a delivery is booked on the delivery, from kilos × rate.
+            Typing it here as well is how the same repayment gets counted twice. */}
+        <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <p>Potongan dari setoran pisang <b>jangan</b> dicatat di sini — itu tercatat otomatis saat setoran diinput di
+            Transaksi → Purchasing. Form ini hanya untuk petani yang membayar utangnya langsung (tunai/transfer).</p>
+        </div>
         {/* Informasi Utama */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <h2 className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-4">Informasi Utama</h2>

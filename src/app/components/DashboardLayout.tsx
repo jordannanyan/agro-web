@@ -78,6 +78,7 @@ const menuItems = [
       // what the farmer owes and what has been paid back.
       { id: "installment", label: "Cicilan", path: "/prefinance/installment" },
       { id: "outstanding", label: "Outstanding Petani", path: "/prefinance/outstanding" },
+      { id: "payback-rates", label: "Tarif Potongan", path: "/prefinance/payback-rates" },
     ],
   },
   {
