@@ -149,6 +149,8 @@ export default function PaymentRequestView() {
                   { label: "Entitas", value: data.entity_name },
                   { label: "Sumber", value: data.po_number || data.pr_number || "—" },
                   { label: "Project Code", value: data.budget_code || "—" },
+                  { label: "Item Fund Request", value: (data as any).fund_request_number
+                      ? `${(data as any).fund_request_number} · ${(data as any).fund_request_line_desc ?? ""}` : "— tidak terikat —" },
                   { label: "PIC", value: data.person_in_charge || "—" },
                   { label: "Tanggal Kegiatan", value: data.activity_date || "—" },
                   { label: "Estimasi Bayar", value: data.estimated_pay_date || "—" },

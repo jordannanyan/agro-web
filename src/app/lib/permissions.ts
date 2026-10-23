@@ -35,6 +35,11 @@ export const ROLE = {
   HR: "HR",
   SUPER_ADMIN: "SUPER_ADMIN",
   ADMIN: "ADMIN",
+  /**
+   * Group / HQ (2026-10). Reads every PT like the Admin and changes nothing in the
+   * operational modules; signs the Fund Request when listed as a signer. No Settings.
+   */
+  HQ: "HQ",
 } as const;
 
 export type Role = (typeof ROLE)[keyof typeof ROLE];
@@ -104,7 +109,11 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   // warehouse should not be handed procurement, transactions or farmer payments.
   { prefix: "/warehouse",      roles: [...BUSINESS_CHAIN, ROLE.WAREHOUSE_STAFF] },
   { prefix: "/prefinance",     roles: ABOVE_FIELD_ADMIN },
-  { prefix: "/financial",      roles: FINANCE },
+  // Fund Request is filled in by several hands — HR the personnel costs, the PM
+  // operations and offtake, Finance the rest — and signed by the Director and HQ.
+  { prefix: "/financial/fund-request", roles: [...FINANCE, ROLE.HR, ROLE.PROJECT_MANAGER, ROLE.HQ] },
+  // Budget / Actual / Budget vs Actual: read by whoever answers for the money.
+  { prefix: "/financial",      roles: [...FINANCE, ROLE.PROJECT_MANAGER, ROLE.HQ] },
   // Terbuka untuk seluruh rantai bisnis, bukan cuma Finance dan Direktur. Field
   // Admin yang mencatat pembelian dan stok yang jadi investasi sebuah lahan, dan
   // Project Manager yang mempertanggungjawabkan lapangannya, tidak bisa memeriksa
@@ -133,6 +142,8 @@ export function canAccessPath(roleCode: string | null | undefined, path: string)
   // Admin met "Akses Ditolak" everywhere and the product was unusable for the
   // four people who hold that role.
   if (roleCode === ROLE.SUPER_ADMIN || roleCode === ROLE.ADMIN) return true;
+  // HQ reads every screen the Admin reads, except system administration.
+  if (roleCode === ROLE.HQ) return !matches(path, "/settings");
   // The landing page is the executive dashboard: company KPIs, spend, revenue. It is
   // open to everyone in the business flow, but not to somebody hired to run a
   // warehouse — they are sent to the warehouse dashboard instead (see homePath).
@@ -178,7 +189,7 @@ export function canWriteProfitSharing(roleCode: string | null | undefined): bool
   return canAccessPath(roleCode, "/profit-sharing")
     // The Admin reads every operational module and writes to none, so the route
     // rule alone would say yes where the API says no.
-    && roleCode !== ROLE.ADMIN;
+    && roleCode !== ROLE.ADMIN && roleCode !== ROLE.HQ;
 }
 
 /**
@@ -265,7 +276,7 @@ export interface UserLike {
 
 /** Sees every entity's data: both administrators. Used for read scope only. */
 function isSystemAdmin(roleCode: string | null | undefined): boolean {
-  return roleCode === ROLE.SUPER_ADMIN || roleCode === ROLE.ADMIN;
+  return roleCode === ROLE.SUPER_ADMIN || roleCode === ROLE.ADMIN || roleCode === ROLE.HQ;
 }
 
 /**
@@ -283,7 +294,7 @@ function canOverride(roleCode: string | null | undefined): boolean {
  * rather than works in them, so their screens show the data without the buttons.
  */
 export function canWriteOperations(user: UserLike | null | undefined): boolean {
-  return !!user?.role_code && user.role_code !== ROLE.ADMIN;
+  return !!user?.role_code && user.role_code !== ROLE.ADMIN && user.role_code !== ROLE.HQ;
 }
 
 /**

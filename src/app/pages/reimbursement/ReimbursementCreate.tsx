@@ -21,6 +21,7 @@ import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
+import { BudgetCodeOptions } from "../../components/BudgetCodeOptions";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -29,7 +30,7 @@ interface Kth {
   bank_name: string | null; bank_account: string | null; bank_account_name: string | null;
 }
 interface Farmer { id: number; farmer_name: string; no_rek: string | null }
-interface BudgetCode { id: number; code: string }
+interface BudgetCode { id: number; code: string; main_account?: string | null; sub_account?: string | null; is_active?: number | null }
 
 type Category = "DailyWorker" | "LabourLoanPreFinance" | "LabourLoanProfitSharing";
 
@@ -326,7 +327,7 @@ export default function ReimbursementCreate() {
               <label className={label}>Project Code</label>
               <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}>
                 <option value="">— tanpa kode —</option>
-                {(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}
+                <BudgetCodeOptions codes={budgetCodes} selected={budgetCodeId} />
               </select>
             </div>
           </div>

@@ -9,11 +9,12 @@ import { useApi } from "../../lib/hooks";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 import { ShowUsedSources } from "../../components/ShowUsedSources";
 import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
+import { BudgetCodeOptions } from "../../components/BudgetCodeOptions";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 interface Vendor { id: number; vendor_name: string; }
-interface BudgetCode { id: number; code: string; }
+interface BudgetCode { id: number; code: string; main_account?: string | null; sub_account?: string | null; is_active?: number | null; }
 interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; status: string; }
 interface POItem {
   key: string; pr_item_id: number | null; description: string; order_qty: string; unit_price: string;
@@ -242,7 +243,7 @@ export default function PurchaseOrderCreate() {
                 </>
               ) : (
                 <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}>
-                  <option value="">—</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}
+                  <option value="">—</option><BudgetCodeOptions codes={budgetCodes} selected={budgetCodeId} />
                 </select>
               )}
             </div>
@@ -275,10 +276,10 @@ export default function PurchaseOrderCreate() {
                     <td className="py-2 pr-3"><Input value={it.description} onChange={(e) => upd(it.key, "description", e.target.value)} placeholder="Deskripsi" /></td>
                     {/* Per line, not per order: a request may span several budgets and
                         the order has to carry them through rather than flatten them. */}
-                    <td className="py-2 px-3 w-32">
+                    <td className="py-2 px-3 w-56">
                       <select value={it.budget_code_id} onChange={(e) => upd(it.key, "budget_code_id", e.target.value)} className={selectCls}>
                         <option value="">—</option>
-                        {(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}
+                        <BudgetCodeOptions codes={budgetCodes} selected={it.budget_code_id} />
                       </select>
                     </td>
                     <td className="py-2 px-3 w-28"><Input type="number" className="text-right" value={it.order_qty} onChange={(e) => upd(it.key, "order_qty", e.target.value)} placeholder="0" /></td>

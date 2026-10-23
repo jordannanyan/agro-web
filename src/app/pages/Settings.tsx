@@ -101,10 +101,24 @@ export default function Settings() {
     { name: "is_self", label: "Bank Mandiri (transfer sesama)", type: "switch" },
     { name: "is_active", label: "Aktif", type: "switch" },
   ];
+  // SPV Budget Codes Master File: the combined code plus its two halves, which the
+  // Fund Request and every budget-code dropdown group by.
   const budgetFields: FieldDef[] = [
-    { name: "code", label: "Kode", required: true },
-    { name: "name", label: "Nama" },
-    { name: "is_active", label: "Status", type: "switch" },
+    { name: "code", label: "Kode (NN-Main - Sub)", required: true, colSpan: 2, placeholder: "01-Operational Expenditures - Maintenance" },
+    { name: "main_account", label: "Main account", placeholder: "Operational Expenditures" },
+    { name: "sub_account", label: "Sub account", placeholder: "Maintenance" },
+    { name: "name", label: "Nama", hideInTable: true },
+    { name: "sort_order", label: "Urutan", type: "number", hideInTable: true },
+    { name: "is_active", label: "Status", type: "switch", default: 1 },
+  ];
+  const dimensionFields: FieldDef[] = [
+    { name: "dim_type", label: "Jenis", type: "select", required: true, options: [
+      { value: "budget_purpose", label: "Budget Purpose" }, { value: "profit_center", label: "Profit Center" },
+      { value: "budget_inflow", label: "Budget Inflow" }, { value: "cash_flow_type", label: "Cash Flow Type" },
+    ] },
+    { name: "name", label: "Nama", required: true },
+    { name: "sort_order", label: "Urutan", type: "number" },
+    { name: "is_active", label: "Status", type: "switch", default: 1 },
   ];
   const unitFields: FieldDef[] = [
     { name: "unit_name", label: "Satuan", required: true },
@@ -244,7 +258,12 @@ export default function Settings() {
 
         <TabsContent value="general"><GeneralTab /></TabsContent>
         <TabsContent value="vendors"><Card className="p-6"><MasterCrud endpoint="vendors" title="Master Vendor" fields={vendorFields} /></Card></TabsContent>
-        <TabsContent value="budget"><Card className="p-6"><MasterCrud endpoint="budget-codes" title="Master Budget Codes" fields={budgetFields} /></Card></TabsContent>
+        <TabsContent value="budget">
+          <Card className="p-6 space-y-8">
+            <MasterCrud endpoint="budget-codes" title="Master Budget Codes" fields={budgetFields} />
+            <MasterCrud endpoint="finance-dimensions" title="Budget Purpose · Profit Center · Budget Inflow · Cash Flow Type" fields={dimensionFields} />
+          </Card>
+        </TabsContent>
         <TabsContent value="saprodi"><Card className="p-6"><MasterCrud endpoint="sapropdi" title="Master Barang Saprodi" fields={sapropdiFields} /></Card></TabsContent>
         <TabsContent value="units"><Card className="p-6"><MasterCrud endpoint="units" title="Master Satuan" fields={unitFields} /></Card></TabsContent>
         <TabsContent value="payment-methods"><Card className="p-6"><MasterCrud endpoint="payment-methods" title="Master Metode Pembayaran" fields={paymentFields} /></Card></TabsContent>

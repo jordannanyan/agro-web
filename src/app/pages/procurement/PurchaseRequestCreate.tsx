@@ -8,8 +8,9 @@ import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
 import { EntityField } from "../../components/EntityField";
+import { BudgetCodeOptions } from "../../components/BudgetCodeOptions";
 
-interface BudgetCode { id: number; code: string; }
+interface BudgetCode { id: number; code: string; main_account?: string | null; sub_account?: string | null; is_active?: number | null; }
 interface Unit { id: number; unit_name: string; }
 interface Sapropdi { id: number; sapropdi_name: string; }
 
@@ -201,7 +202,7 @@ export default function PurchaseRequestCreate() {
                   const total = (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_cost) || 0);
                   return (
                     <tr key={it.key} className="border-b border-slate-50">
-                      <td className="py-2 pr-3 w-32"><select value={it.budget_code_id} onChange={(e) => updateItem(it.key, "budget_code_id", e.target.value)} className={selectCls}><option value="">—</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select></td>
+                      <td className="py-2 pr-3 w-56"><select value={it.budget_code_id} onChange={(e) => updateItem(it.key, "budget_code_id", e.target.value)} className={selectCls}><option value="">—</option><BudgetCodeOptions codes={budgetCodes} selected={it.budget_code_id} /></select></td>
                       <td className="py-2 px-3 w-40"><select value={it.sapropdi_id} onChange={(e) => { updateItem(it.key, "sapropdi_id", e.target.value); const s = (sapropdi || []).find((x) => String(x.id) === e.target.value); if (s && !it.description) updateItem(it.key, "description", s.sapropdi_name); }} className={selectCls}><option value="">—</option>{(sapropdi || []).map((s) => <option key={s.id} value={s.id}>{s.sapropdi_name}</option>)}</select></td>
                       <td className="py-2 px-3 min-w-[180px]"><Input value={it.description} onChange={(e) => updateItem(it.key, "description", e.target.value)} placeholder="Deskripsi item" /></td>
                       <td className="py-2 px-3 w-28"><select value={it.unit_id} onChange={(e) => updateItem(it.key, "unit_id", e.target.value)} className={selectCls}><option value="">—</option>{(units || []).map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}</select></td>

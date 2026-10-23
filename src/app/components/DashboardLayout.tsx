@@ -86,9 +86,10 @@ const menuItems = [
     icon: DollarSign,
     label: "Finance",
     subItems: [
-      { id: "fin-budget",     label: "Budget",           path: "/financial/budget" },
+      { id: "fin-fr",         label: "Fund Request",      path: "/financial/fund-request" },
+      { id: "fin-budget",     label: "Budget",            path: "/financial/budget" },
       { id: "fin-actual",     label: "Actual",            path: "/financial/actual" },
-      { id: "fin-monitoring", label: "Budget Monitoring", path: "/financial/monitoring" },
+      { id: "fin-bva",        label: "Budget vs Actual",  path: "/financial/budget-vs-actual" },
     ],
   },
   {
@@ -124,6 +125,7 @@ const INBOX_PATHS: Record<string, keyof Omit<InboxCounts, "total">> = {
   "/procurement/payment-request": "PayReq",
   "/reimbursement": "Reimbursement",
   "/warehouse/opname": "StockOpname",
+  "/financial/fund-request": "FundRequest",
 };
 
 /** Spell out what the number is made of, for the badge's tooltip. */

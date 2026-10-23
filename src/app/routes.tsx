@@ -28,7 +28,11 @@ import StockOpnameList from "./pages/warehouse/StockOpnameList";
 import StockOpnameCreate from "./pages/warehouse/StockOpnameCreate";
 import StockOpnameView from "./pages/warehouse/StockOpnameView";
 import WarehouseReports from "./pages/warehouse/WarehouseReports";
-import FinanceMain from "./pages/finance/FinanceMain";
+import FundRequestList from "./pages/finance/FundRequestList";
+import FundRequestDetail from "./pages/finance/FundRequestDetail";
+import FinanceBudget from "./pages/finance/FinanceBudget";
+import FinanceActual from "./pages/finance/FinanceActual";
+import FinanceBudgetVsActual from "./pages/finance/FinanceBudgetVsActual";
 import Reports from "./pages/Reports";
 import Purchasing from "./pages/transaction/Purchasing";
 import Processing from "./pages/transaction/Processing";
@@ -133,10 +137,14 @@ export const router = createBrowserRouter([
       { path: "prefinance/payback-rates",      Component: PaybackRates },
 
       // ── Finance sub-pages ─────────────────────────────────────────────────
-      { path: "financial",                     Component: FinanceMain },
-      { path: "financial/budget",              Component: FinanceMain },
-      { path: "financial/actual",              Component: FinanceMain },
-      { path: "financial/monitoring",          Component: FinanceMain },
+      // Fund Request → Budget → Actual → Budget vs Actual (2026-10): input once, in the FR.
+      { path: "financial",                     Component: FundRequestList },
+      { path: "financial/fund-request",        Component: FundRequestList },
+      { path: "financial/fund-request/:id",    Component: FundRequestDetail },
+      { path: "financial/budget",              Component: FinanceBudget },
+      { path: "financial/actual",              Component: FinanceActual },
+      { path: "financial/budget-vs-actual",    Component: FinanceBudgetVsActual },
+      { path: "financial/monitoring",          Component: FinanceBudgetVsActual },
 
       // ── Profit Sharing sub-pages ──────────────────────────────────────────
       { path: "profit-sharing",                Component: ProfitSharingPage },

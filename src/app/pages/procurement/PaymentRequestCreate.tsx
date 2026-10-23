@@ -10,10 +10,15 @@ import { EntityField } from "../../components/EntityField";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 import { ShowUsedSources } from "../../components/ShowUsedSources";
 import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
+import { BudgetCodeOptions } from "../../components/BudgetCodeOptions";
 
-interface BudgetCode { id: number; code: string; }
+interface BudgetCode { id: number; code: string; main_account?: string | null; sub_account?: string | null; is_active?: number | null; }
 interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; grand_total: number; }
 interface POOption { id: number; po_number: string; entity_id: number; entity_name?: string | null; }
+interface FrLineOption {
+  id: number; fr_number: string; period: string; description: string; group_label: string | null;
+  budget_code_id: number | null; budget_code: string | null; budget: number; actual: number; remaining: number;
+}
 interface BankOption { id: number; bank_code: string; bank_name: string; is_self: number }
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
@@ -78,6 +83,15 @@ export default function PaymentRequestCreate() {
     include_id: poId || "",
   });
   const [budgetCodeId, setBudgetCodeId] = useState("");
+  // The Fund Request budget line this payment realises. Once the request is Paid,
+  // its amount is that line's Actual — the only way Actual is ever recorded.
+  const [frLineId, setFrLineId] = useState("");
+  const payEntityId = isExpense ? entityId
+    : sourceType === "PO" ? String((pos || []).find((x) => String(x.id) === poId)?.entity_id ?? "")
+    : String((prs || []).find((x) => String(x.id) === prId)?.entity_id ?? "");
+  const { data: frLines } = useApi<FrLineOption[]>(payEntityId ? "fund-requests/lines/picker" : null,
+    { entity_id: payEntityId, include_id: frLineId || "" }, [payEntityId, frLineId]);
+  const frLine = (frLines || []).find((l) => String(l.id) === frLineId) || null;
   // The code the source document already carries. A payment does not classify the
   // spend a second time - the PO (or the PR it came straight from) settled that -
   // so the field only asks when the source has nothing to follow.
@@ -124,6 +138,7 @@ export default function PaymentRequestCreate() {
         setPrId(p.purchase_request_id ? String(p.purchase_request_id) : "");
         setPoId(p.purchase_order_id ? String(p.purchase_order_id) : "");
         setBudgetCodeId(p.budget_code_id ? String(p.budget_code_id) : "");
+        setFrLineId(p.fund_request_line_id ? String(p.fund_request_line_id) : "");
         setAmount(String(p.amount ?? ""));
         setReason(p.reason ?? "");
         setPic(p.person_in_charge ?? "");
@@ -214,6 +229,7 @@ export default function PaymentRequestCreate() {
       purchase_request_id: sourceType === "PR" ? Number(prId) : null,
       purchase_order_id: sourceType === "PO" ? Number(poId) : null,
       budget_code_id: budgetCodeId ? Number(budgetCodeId) : null,
+      fund_request_line_id: frLineId ? Number(frLineId) : null,
       amount: Number(amount),
       reason, person_in_charge: pic,
       activity_date: activityDate || null,
@@ -393,11 +409,41 @@ export default function PaymentRequestCreate() {
                 </>
               ) : (
                 <>
-                  <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">— pilih —</option>{(budgetCodes || []).map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select>
+                  <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">— pilih —</option><BudgetCodeOptions codes={budgetCodes} selected={budgetCodeId} /></select>
                   {srcBudget.id != null && (
                     <p className="text-[11px] text-amber-600 mt-1">Berbeda dari kode dokumen sumber ({srcBudget.code}).</p>
                   )}
                 </>
+              )}
+            </div>
+            {/* Which approved budget this spends. Paid requests are their line's Actual,
+                so this is what Budget vs Actual is built from. */}
+            <div className="col-span-2">
+              <label className={label}>Item Fund Request (budget)</label>
+              <select value={frLineId} disabled={!payEntityId}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFrLineId(v);
+                  const l = (frLines || []).find((x) => String(x.id) === v);
+                  // The line already says which budget code it is; take it unless one is set.
+                  if (l?.budget_code_id && !budgetCodeId) setBudgetCodeId(String(l.budget_code_id));
+                }} className={selectCls}>
+                <option value="">{payEntityId ? "— tidak terikat fund request —" : "Pilih sumber / entitas dulu"}</option>
+                {(frLines || []).map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.fr_number} · {l.description} — sisa Rp {Number(l.remaining || 0).toLocaleString("id-ID")}
+                  </option>
+                ))}
+              </select>
+              {frLine && (
+                <p className={`text-[11px] mt-1 ${Number(amount) > Number(frLine.remaining) ? "text-amber-600" : "text-slate-400"}`}>
+                  {frLine.group_label ? `${frLine.group_label} · ` : ""}{frLine.budget_code || "tanpa budget code"} ·
+                  {" "}budget Rp {Number(frLine.budget).toLocaleString("id-ID")}, terealisasi Rp {Number(frLine.actual).toLocaleString("id-ID")}
+                  {Number(amount) > Number(frLine.remaining) ? " — nominal melebihi sisa budget item ini" : ""}
+                </p>
+              )}
+              {payEntityId && (frLines || []).length === 0 && (
+                <p className="text-[11px] text-slate-400 mt-1">Belum ada fund request yang disetujui HQ untuk PT ini.</p>
               )}
             </div>
             <div>
