@@ -41,7 +41,7 @@ export function FinanceFilters({ f }: { f: ReturnType<typeof useFinanceFilters> 
       {!bound && (
         <select value={f.entityId} onChange={(e) => f.setEntityId(e.target.value)} className={cls}>
           <option value="">Semua PT</option>
-          {(entities || []).filter((e) => !e.entity_type || e.entity_type === "operational").map((e) => <option key={e.id} value={e.id}>{e.entities_name}</option>)}
+          {(entities || []).filter((e) => !e.entity_type || String(e.entity_type).toLowerCase() === "operational").map((e) => <option key={e.id} value={e.id}>{e.entities_name}</option>)}
         </select>
       )}
       <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">

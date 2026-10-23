@@ -91,7 +91,7 @@ export default function FundRequestList() {
   const [show, setShow] = useState(false);
   const { data, loading, error } = useApi<Row[]>("fund-requests", { year, entity_id: entityId || undefined }, [year, entityId]);
   const { data: entities } = useApi<Entity[]>("entities");
-  const opEntities = (entities || []).filter((e) => !e.entity_type || e.entity_type === "operational");
+  const opEntities = (entities || []).filter((e) => !e.entity_type || String(e.entity_type).toLowerCase() === "operational");
   const mayCreate = [ROLE.FINANCE_MANAGER, ROLE.FINANCE_STAFF, ROLE.PROJECT_MANAGER, ROLE.SUPER_ADMIN].includes(user?.role_code as any);
   const rows = data || [];
   const sumBy = (s: Stage) => rows.filter((r) => r.stage === s).length;
