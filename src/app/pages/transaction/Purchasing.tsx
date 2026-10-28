@@ -33,6 +33,9 @@ interface PurchasingRow {
   // for the farmer — computed by the API.
   repayment_total: number;
   net_payment: number;
+  // A deduction typed by hand that differs from the rate, and why.
+  repayment_manual?: number;
+  repayment_reason?: string | null;
   payment_status: "paid" | "unpaid";
   plot?: { id: number; plot_name: string } | null;
   farmer?: { id: number; farmer_name: string } | null;
@@ -96,6 +99,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   const [manual, setManual] = useState<Record<number, number> | null>(null);
   const [existing, setExisting] = useState<Record<number, number> | null>(null);
   const [forceAuto, setForceAuto] = useState(false);
+  const [reason, setReason] = useState(editRow?.repayment_reason ?? "");
   const driversKey = `${plotId}|${gradeId}|${date}|${Number(quantity) || 0}`;
   const [initialKey] = useState(driversKey);
 
@@ -142,6 +146,8 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     (l) => l.per_kg > 0 || l.outstanding > 0 || repayAmount(l) > 0);
   const repayTotal = repayLines.reduce((sum, l) => sum + repayAmount(l), 0);
   const repayOver = repayLines.some((l) => repayAmount(l) > Math.max(0, l.outstanding) + 0.5);
+  // Typed amounts that are not what the rate gives need a reason.
+  const repayDiffers = !!manual && repayLines.some((l) => Math.abs(repayAmount(l) - l.amount) > 0.5);
   const ratePerKg = preview?.rate ? Number(preview.rate.saprodi_per_kg) + Number(preview.rate.labor_per_kg) : 0;
   const rateFinal = preview?.rate?.full_price != null ? Number(preview.rate.full_price) - ratePerKg : null;
 
@@ -158,6 +164,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     if (supplierType === "farmer" && !plotId) { toast.error("Pilih plot petani"); return; }
     if (supplierType === "collector" && !collectorId) { toast.error("Pilih collector"); return; }
     if (isPF && repayOver) { toast.error("Potongan cicilan melebihi sisa utang petani"); return; }
+    if (isPF && repayDiffers && !reason.trim()) { toast.error("Potongan berbeda dari tarif — isi alasannya"); return; }
     const payload: any = {
       supplier_type: supplierType,
       commodities_id: Number(commodityId),
@@ -173,6 +180,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     else payload.collector_id = Number(collectorId);
     if (isPF && manual) {
       payload.repayment = repayLines.map((l) => ({ pre_finance_type_id: l.pre_finance_type_id, amount: repayAmount(l) }));
+      if (repayDiffers) payload.repayment_reason = reason.trim();
     } else if (isPF && forceAuto) {
       payload.repayment = "auto";
     }
@@ -353,6 +361,20 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
                   </div>
                 );
               })}
+              {repayDiffers && (
+                <div>
+                  <Label className="text-xs text-slate-600 mb-1.5 block">Alasan potongan berbeda dari tarif *</Label>
+                  <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={255}
+                    placeholder="mis. petani minta bayar lebih Rp 200.000" />
+                  <p className="text-xs text-slate-400 mt-1">Tarif menghitung {fmtRp(repayLines.reduce((s, l) => s + l.amount, 0))} — setoran ini ditandai manual.</p>
+                </div>
+              )}
+              {!manual && keepsExisting && Number(editRow?.repayment_manual) === 1 && (
+                <div className="flex items-start gap-2 text-xs text-slate-600">
+                  <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>Potongan diisi manual{editRow?.repayment_reason ? `: ${editRow.repayment_reason}` : ""}</span>
+                </div>
+              )}
               {!preview && <p className="text-xs text-slate-400">Isi tanggal dan kuantitas untuk menghitung potongan.</p>}
             </div>
           )}
@@ -526,6 +548,9 @@ export default function Purchasing() {
                   <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-slate-900">{fmtRp(r.total_value)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-amber-700" title={Number(r.repayment_total) > 0 ? `Dibayar ke petani: ${fmtRp(r.net_payment)}` : undefined}>
                     {Number(r.repayment_total) > 0 ? fmtRp(r.repayment_total) : "—"}
+                    {Number(r.repayment_manual) === 1 && (
+                      <span className="block text-[10px] font-sans font-semibold uppercase tracking-wide text-slate-500" title={r.repayment_reason || undefined}>manual</span>
+                    )}
                   </td>
                   <td className="py-3 px-4">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${r.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>

@@ -19,6 +19,7 @@ interface InstallmentRow {
   method_name: string | null; reference_no: string | null; total_payment: number;
   // 'delivery' = deducted from a purchasing (booked there); 'cash' = paid outside one.
   source: "delivery" | "cash"; purchasing_id: number | null;
+  is_manual?: number; manual_reason?: string | null;
   purchasing_invoice: string | null; purchasing_quantity: number | null; purchasing_plot_name: string | null;
 }
 interface OutstandingRow {
@@ -108,9 +109,15 @@ function TabCicilan({ mayWrite }: { mayWrite: boolean }) {
                     {item.source === "delivery" ? (
                       <>
                         <Badge className="border text-xs bg-amber-50 text-amber-700 border-amber-200">Potongan setoran</Badge>
+                        {Number(item.is_manual) === 1 && (
+                          <Badge className="border text-xs bg-slate-100 text-slate-600 border-slate-200 ml-1" title={item.manual_reason || undefined}>Manual</Badge>
+                        )}
                         <p className="text-xs text-slate-400 mt-1">
                           {item.purchasing_plot_name} · {Number(item.purchasing_quantity || 0).toLocaleString("id-ID")} kg
                         </p>
+                        {Number(item.is_manual) === 1 && item.manual_reason && (
+                          <p className="text-xs text-slate-500 italic mt-0.5">{item.manual_reason}</p>
+                        )}
                       </>
                     ) : (
                       <Badge className="border text-xs bg-slate-100 text-slate-600 border-slate-200">Tunai</Badge>
