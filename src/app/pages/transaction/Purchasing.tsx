@@ -16,8 +16,9 @@ type Scheme = "BeliPutus" | "PreFinance" | "ProfitSharing";
 
 interface Plot {
   id: number; plot_name: string; scheme: Scheme; farmer_id: number; farmer?: { id: number; farmer_name: string } | null;
-  // Subplot: one land farmed under two schemes keeps one plot per commodity
-  // (Suwanto: SJ0015 cocoa Pre-Finance, SUW 1 banana Profit Sharing).
+  // Subplot: one land farmed under two schemes keeps one plot per commodity,
+  // named after the land ("SJ0015" cocoa Pre-Finance, "SJ0015 · Pisang" banana
+  // Profit Sharing) — a land has one plot ID.
   parent_plot_id?: number | null; parent_plot_name?: string | null;
   commodities_id?: number | null; commodity_name?: string | null;
 }
@@ -156,7 +157,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     const sib = family.find((p) => String(p.commodities_id) === id);
     if (sib) {
       setPlotId(String(sib.id));
-      toast.info(`${shortCommodity(sib.commodity_name)} dicatat di subplot ${sib.plot_name} (${SCHEME_META[sib.scheme]?.label ?? sib.scheme})`);
+      toast.info(`${shortCommodity(sib.commodity_name)} lahan ini dicatat sebagai ${SCHEME_META[sib.scheme]?.label ?? sib.scheme}`);
     }
   }
   const scheme: Scheme = supplierType === "collector" ? "BeliPutus" : (selectedPlot?.scheme ?? "BeliPutus");
@@ -279,7 +280,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
                     <optgroup key={land.id} label={`Lahan ${land.plot_name}`}>
                       {[land, ...subs].map((p) => (
                         <option key={p.id} value={p.id}>
-                          {shortCommodity(p.commodity_name) || p.plot_name} · {SCHEME_META[p.scheme]?.label ?? p.scheme}{p.id !== land.id ? ` (${p.plot_name})` : ""}
+                          {shortCommodity(p.commodity_name) || p.plot_name} · {SCHEME_META[p.scheme]?.label ?? p.scheme}
                         </option>
                       ))}
                     </optgroup>
@@ -309,9 +310,9 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
           </div>
           {supplierType === "farmer" && family.length > 0 && selectedPlot && (
             <p className="-mt-2 text-xs text-slate-500">
-              Lahan {family.find((p) => !p.parent_plot_id)?.plot_name} punya {family.length} subplot:{" "}
-              {family.map((p) => `${shortCommodity(p.commodity_name) || "?"} (${p.plot_name}, ${SCHEME_META[p.scheme]?.label ?? p.scheme})`).join(" · ")}.
-              Ganti komoditas untuk pindah subplot.
+              Lahan {family.find((p) => !p.parent_plot_id)?.plot_name}:{" "}
+              {family.map((p) => `${shortCommodity(p.commodity_name) || "?"} ${SCHEME_META[p.scheme]?.label ?? p.scheme}`).join(", ")}.
+              Ganti komoditas untuk pindah skema.
             </p>
           )}
 
