@@ -71,7 +71,7 @@ export default function StockOpnameList() {
         <div>
           <h1 className="text-slate-900 font-semibold text-lg">Stok Opname</h1>
           <p className="text-slate-500 text-sm">
-            Hitung fisik lalu bandingkan dengan catatan · satu gudang sekali per 30 hari
+            Hitung fisik lalu bandingkan dengan catatan · boleh kapan saja, satu gudang satu opname per tanggal
           </p>
         </div>
         <div className="ml-auto flex items-center gap-3">

@@ -41,7 +41,7 @@ interface Sheet {
   last_opname: { opname_number: string; opname_date: string } | null;
   next_allowed: string | null;
   message: string | null;
-  interval_days: number;
+  interval_days: number | null;
   items: SheetItem[];
 }
 
@@ -159,8 +159,8 @@ export default function StockOpnameCreate() {
         </div>
       </Card>
 
-      {/* Jendela 30 hari dijawab di sini, bukan saat tombol Simpan ditekan: orang
-          sudah terlanjur menghitung satu gudang penuh sebelum sampai ke tombol itu. */}
+      {/* Dijawab di sini, bukan saat tombol Simpan ditekan: orang sudah terlanjur
+          menghitung satu gudang penuh sebelum sampai ke tombol itu. */}
       {blocked && (
         <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200">
           <Lock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />

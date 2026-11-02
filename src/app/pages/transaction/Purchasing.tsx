@@ -14,7 +14,13 @@ import { useAuth } from "../../store/AuthContext";
 // ── Types (API-shaped) ────────────────────────────────────────────────────────
 type Scheme = "BeliPutus" | "PreFinance" | "ProfitSharing";
 
-interface Plot { id: number; plot_name: string; scheme: Scheme; farmer_id: number; farmer?: { id: number; farmer_name: string } | null; }
+interface Plot {
+  id: number; plot_name: string; scheme: Scheme; farmer_id: number; farmer?: { id: number; farmer_name: string } | null;
+  // Subplot: one land farmed under two schemes keeps one plot per commodity
+  // (Suwanto: SJ0015 cocoa Pre-Finance, SUW 1 banana Profit Sharing).
+  parent_plot_id?: number | null; parent_plot_name?: string | null;
+  commodities_id?: number | null; commodity_name?: string | null;
+}
 interface Commodity { id: number; commodities_name: string; }
 interface Grade { id: number; grade_name: string; }
 interface Collector { id: number; collector_name: string; }
@@ -57,6 +63,9 @@ function SchemeBadge({ scheme }: { scheme: Scheme }) {
   const m = SCHEME_META[scheme] ?? SCHEME_META.BeliPutus;
   return <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${m.cls}`}>{m.label}</span>;
 }
+
+// "Cocoa (Kakao)" → "Kakao": the name the field team uses.
+const shortCommodity = (n?: string | null) => (n ? (n.match(/\(([^)]+)\)/)?.[1] ?? n) : "");
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -119,7 +128,37 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     return Array.from(m, ([id, name]) => ({ id, name }));
   }, [plots]);
   const farmerPlots = useMemo(() => plots.filter((p) => String(p.farmer_id) === farmerId), [plots, farmerId]);
+  // A farmer's plots as lands, each with the subplots lying on it.
+  const lands = useMemo(() => {
+    const ids = new Set(farmerPlots.map((p) => p.id));
+    return farmerPlots
+      .filter((p) => !p.parent_plot_id || !ids.has(p.parent_plot_id))
+      .map((land) => ({ land, subs: farmerPlots.filter((p) => p.parent_plot_id === land.id) }));
+  }, [farmerPlots]);
   const selectedPlot = useMemo(() => plots.find((p) => String(p.id) === plotId), [plots, plotId]);
+  const family = useMemo(() => {
+    if (!selectedPlot) return [];
+    const landId = selectedPlot.parent_plot_id ?? selectedPlot.id;
+    const fam = plots.filter((p) => p.id === landId || p.parent_plot_id === landId);
+    return fam.length > 1 ? fam : [];
+  }, [plots, selectedPlot]);
+
+  function choosePlot(id: string) {
+    setPlotId(id);
+    const p = plots.find((x) => String(x.id) === id);
+    if (p?.commodities_id && !commodityId) setCommodityId(String(p.commodities_id));
+  }
+  // Picking the other commodity of a land moves the delivery to the subplot that
+  // grows it — the API refuses the wrong one anyway, this just gets there first.
+  function chooseCommodity(id: string) {
+    setCommodityId(id);
+    if (!selectedPlot?.commodities_id || String(selectedPlot.commodities_id) === id) return;
+    const sib = family.find((p) => String(p.commodities_id) === id);
+    if (sib) {
+      setPlotId(String(sib.id));
+      toast.info(`${shortCommodity(sib.commodity_name)} dicatat di subplot ${sib.plot_name} (${SCHEME_META[sib.scheme]?.label ?? sib.scheme})`);
+    }
+  }
   const scheme: Scheme = supplierType === "collector" ? "BeliPutus" : (selectedPlot?.scheme ?? "BeliPutus");
   const isPS = scheme === "ProfitSharing";
   const priceNum = isPS ? 0 : (parseFloat(price) || 0);
@@ -234,9 +273,19 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
               </div>
               <div>
                 <Label className="text-xs text-slate-600 mb-1.5 block">Plot *</Label>
-                <select value={plotId} onChange={(e) => setPlotId(e.target.value)} disabled={!farmerId} className={selectCls}>
+                <select value={plotId} onChange={(e) => choosePlot(e.target.value)} disabled={!farmerId} className={selectCls}>
                   <option value="">Pilih plot…</option>
-                  {farmerPlots.map((p) => <option key={p.id} value={p.id}>{p.plot_name}</option>)}
+                  {lands.map(({ land, subs }) => subs.length ? (
+                    <optgroup key={land.id} label={`Lahan ${land.plot_name}`}>
+                      {[land, ...subs].map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {shortCommodity(p.commodity_name) || p.plot_name} · {SCHEME_META[p.scheme]?.label ?? p.scheme}{p.id !== land.id ? ` (${p.plot_name})` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : (
+                    <option key={land.id} value={land.id}>{land.plot_name}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -258,11 +307,18 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
             </div>
             <SchemeBadge scheme={scheme} />
           </div>
+          {supplierType === "farmer" && family.length > 0 && selectedPlot && (
+            <p className="-mt-2 text-xs text-slate-500">
+              Lahan {family.find((p) => !p.parent_plot_id)?.plot_name} punya {family.length} subplot:{" "}
+              {family.map((p) => `${shortCommodity(p.commodity_name) || "?"} (${p.plot_name}, ${SCHEME_META[p.scheme]?.label ?? p.scheme})`).join(" · ")}.
+              Ganti komoditas untuk pindah subplot.
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs text-slate-600 mb-1.5 block">Komoditas *</Label>
-              <select value={commodityId} onChange={(e) => setCommodityId(e.target.value)} className={selectCls}>
+              <select value={commodityId} onChange={(e) => chooseCommodity(e.target.value)} className={selectCls}>
                 <option value="">Pilih…</option>
                 {commodities.map((c) => <option key={c.id} value={c.id}>{c.commodities_name}</option>)}
               </select>
