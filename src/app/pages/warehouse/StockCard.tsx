@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { ArrowLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, ClipboardCheck } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
@@ -22,8 +22,10 @@ export default function StockCard() {
   const [entityFilter, setEntityFilter] = useState("");
   const { data: sapropdi } = useApi<Sapropdi[]>("sapropdi");
   const { data: warehouses } = useApi<Warehouse[]>("warehouses", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
-  const [sapropdiId, setSapropdiId] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
+  // Opened from a line of Inventory Saprodi: ?sapropdi_id=&warehouse_id= preselect it.
+  const [params] = useSearchParams();
+  const [sapropdiId, setSapropdiId] = useState(params.get("sapropdi_id") || "");
+  const [warehouseId, setWarehouseId] = useState(params.get("warehouse_id") || "");
 
   const { data: card, loading } = useApi<CardRow[]>(
     sapropdiId ? "warehouse-stock/stock-card" : null,
