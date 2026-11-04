@@ -80,9 +80,10 @@ export default function Distribution() {
     <div className="space-y-6 pb-8">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl text-slate-900 mb-1">Riwayat Barang Keluar</h1>
+          <h1 className="text-2xl text-slate-900 mb-1">Rincian Utang Saprodi</h1>
           <p className="text-sm text-slate-500">
-            Setiap baris yang pernah keluar gudang ke petani — Pre-Finance &amp; Profit Sharing. Nilainya menjadi utang petani.
+            Setiap barang yang tercatat sebagai utang petani, baris per baris — dari Stock Out gudang maupun pinjaman yang dicatat
+            langsung dari buku besar. Untuk melihat barang keluar per petani, lahan, atau komoditas, buka Gudang → Stock Out.
           </p>
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>

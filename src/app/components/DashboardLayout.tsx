@@ -53,7 +53,6 @@ const menuItems = [
       { id: "wh-stock",    label: "Inventory Saprodi", path: "/warehouse/stock-list" },
       { id: "wh-stockin",  label: "Stock In",          path: "/warehouse/stock-in" },
       { id: "wh-stockout", label: "Stock Out",         path: "/warehouse/stock-out" },
-      { id: "wh-lines",    label: "Riwayat Barang Keluar", path: "/warehouse/stock-out/riwayat" },
       { id: "wh-card",     label: "Kartu Stok",        path: "/warehouse/stock-card" },
       { id: "wh-reorder",  label: "Reorder Monitoring", path: "/warehouse/reorder" },
       { id: "wh-opname",   label: "Stok Opname",       path: "/warehouse/opname" },
@@ -74,8 +73,10 @@ const menuItems = [
     icon: CreditCard,
     label: "Pre-Finance",
     subItems: [
-      // Distribusi moved to Gudang → Stock Out. Pre-Finance keeps what it owns:
-      // what the farmer owes and what has been paid back.
+      // Issuing goods is Gudang → Stock Out. Pre-Finance keeps what it owns: what
+      // the farmer owes, line by line — including loans that never passed through a
+      // warehouse here — and what has been paid back.
+      { id: "debt-lines",  label: "Rincian Utang Saprodi", path: "/prefinance/distribution" },
       { id: "installment", label: "Cicilan", path: "/prefinance/installment" },
       { id: "outstanding", label: "Outstanding Petani", path: "/prefinance/outstanding" },
       { id: "payback-rates", label: "Tarif Potongan", path: "/prefinance/payback-rates" },

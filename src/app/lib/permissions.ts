@@ -108,6 +108,10 @@ const RULES: { prefix: string; roles: Role[] }[] = [
   // prefix in this table omits WAREHOUSE_STAFF on purpose: a person who only runs a
   // warehouse should not be handed procurement, transactions or farmer payments.
   { prefix: "/warehouse",      roles: [...BUSINESS_CHAIN, ROLE.WAREHOUSE_STAFF] },
+  // The farmer-debt lines, moved here from Gudang. The Field Admin records the
+  // goods that make them and kept seeing them; the storekeeper, who runs stock and
+  // not farmer money, no longer does. Must precede the /prefinance rule.
+  { prefix: "/prefinance/distribution", roles: BUSINESS_CHAIN },
   { prefix: "/prefinance",     roles: ABOVE_FIELD_ADMIN },
   // Fund Request is filled in by several hands — HR the personnel costs, the PM
   // operations and offtake, Finance the rest — and signed by the Director and HQ.

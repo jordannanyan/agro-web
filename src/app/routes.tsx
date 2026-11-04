@@ -48,6 +48,9 @@ import ProfitSharingPage from "./pages/ProfitSharing";
 
 /** The claim list moved; anything still pointing at the old one is sent along. */
 const ClaimsRedirect = () => <Navigate to="/reimbursement" replace />;
+// Riwayat Barang Keluar moved from Gudang to Pre-Finance as "Rincian Utang Saprodi"
+// (2026-11-04): old links and bookmarks still land on it.
+const DebtLinesRedirect = () => <Navigate to="/prefinance/distribution" replace />;
 
 export const router = createBrowserRouter([
   { path: "/login", Component: Login },
@@ -108,7 +111,7 @@ export const router = createBrowserRouter([
       { path: "warehouse/stock-in",            Component: StockManagement },
       { path: "warehouse/stock-out",           Component: StockOutList },
       { path: "warehouse/stock-out/create",    Component: StockOutCreate },
-      { path: "warehouse/stock-out/riwayat",   Component: Distribution },
+      { path: "warehouse/stock-out/riwayat",   Component: DebtLinesRedirect },
       { path: "warehouse/stock-out/:id",       Component: StockOutView },
       // Legacy route kept for compatibility
       { path: "warehouse/stock-management",    Component: StockManagement },
@@ -131,6 +134,7 @@ export const router = createBrowserRouter([
       { path: "transaction/selling",           Component: Selling },
 
       // ── Pre Finance ───────────────────────────────────────────────────────
+      { path: "prefinance/distribution",       Component: Distribution },
       { path: "prefinance/installment",        Component: Installment },
       { path: "prefinance/installment/create", Component: InstallmentCreate },
       { path: "prefinance/outstanding",        Component: OutstandingFarmer },
