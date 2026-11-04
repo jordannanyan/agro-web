@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { PackageMinus, Plus, Search, User, MapPin, Sprout, FileText } from "lucide-react";
+import { PackageMinus, Plus, Search, User, MapPin, Sprout, FileText, Wallet } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -9,12 +9,21 @@ import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/Enti
 import { usePagedApi, Pagination } from "../../components/Pagination";
 import { canWriteOperations } from "../../lib/permissions";
 import { useAuth } from "../../store/AuthContext";
-import StockOutSummary, { type Group } from "./StockOutSummary";
+import StockOutSummary, { type Group, SchemeTag } from "./StockOutSummary";
+import LoanOverview from "./LoanOverview";
 
-type View = Group | "document";
+type View = Group | "document" | "loans";
 const VIEWS: [View, string, typeof User][] = [
   ["farmer", "Per Petani", User], ["plot", "Per Lahan", MapPin], ["commodity", "Per Komoditas", Sprout], ["document", "Per Dokumen", FileText],
+  ["loans", "Overview Pinjaman", Wallet],
 ];
+// "2026-03" → the month's first and last day, for filters that take dates.
+const monthStart = (m: string) => (m ? `${m}-01` : undefined);
+const monthEnd = (m: string) => {
+  if (!m) return undefined;
+  const [y, mo] = m.split("-").map(Number);
+  return `${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`;
+};
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -25,7 +34,7 @@ interface Row {
   id: number; stock_out_number: string; stock_out_date: string;
   warehouse_name: string | null; issued_by_name: string | null;
   entity_id: number | null; entity_name: string | null;
-  line_count: number; total_qty: number; total_amount: number; notes: string | null;
+  line_count: number; total_qty: number; total_amount: number; amount_ps: number; notes: string | null;
 }
 
 export default function StockOutList() {
@@ -40,6 +49,9 @@ export default function StockOutList() {
   const [view, setView] = useState<View>("farmer");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  // Pre-Finance (farmer debt) or Profit Sharing (cost of the plot's season):
+  // the same warehouse issues both, and a reader has to be able to tell them apart.
+  const [scheme, setScheme] = useState("");
   const bound = useEntityBound();
   const [entityFilter, setEntityFilter] = useState("");
   const { data: warehouses } = useApi<Warehouse[]>("warehouses", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
@@ -53,7 +65,8 @@ export default function StockOutList() {
     plot_id: plotId || undefined,
     entity_id: entityFilter || undefined,
     search: search || undefined,
-  }, [warehouseId, plotId, entityFilter, search, view]);
+    scheme: scheme || undefined,
+  }, [warehouseId, plotId, entityFilter, search, scheme, view]);
 
   const th = "text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap";
 
@@ -64,6 +77,9 @@ export default function StockOutList() {
           <h1 className="text-2xl text-slate-900 mb-1">Stock Out</h1>
           <p className="text-sm text-slate-500">
             Barang keluar dari gudang ke petani — lihat per petani, per lahan, atau per komoditas, atau per dokumen Stock Out.
+            Setiap barang diberi peruntukannya: <span className="font-semibold text-sky-700">Pre-Finance</span> (utang petani, dicicil per kg)
+            atau <span className="font-semibold text-violet-700">Profit Sharing</span> (biaya lahan bagi hasil). Overview Pinjaman
+            menyajikan angka yang sama dengan sheet Farmer Loan Overview.
           </p>
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
@@ -85,11 +101,17 @@ export default function StockOutList() {
 
       <Card>
         <div className="p-5 border-b border-slate-100 flex flex-wrap items-center gap-3">
-          <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}
+          {view !== "loans" && <select value={scheme} onChange={(e) => setScheme(e.target.value)} aria-label="Peruntukan"
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <option value="">Semua peruntukan</option>
+            <option value="PreFinance">Pre-Finance (utang petani)</option>
+            <option value="ProfitSharing">Profit Sharing (biaya bagi hasil)</option>
+          </select>}
+          {view !== "loans" && <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <option value="">Semua gudang</option>
             {(warehouses || []).map((w) => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
-          </select>
+          </select>}
           {view === "document" && <select value={plotId} onChange={(e) => setPlotId(e.target.value)}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <option value="">Semua plot</option>
@@ -111,15 +133,23 @@ export default function StockOutList() {
           )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <Input placeholder={view === "document" ? "Cari nomor…" : "Cari petani, lahan, barang, komoditas…"} className="pl-9 w-72"
+            <Input placeholder={view === "document" ? "Cari nomor…" : view === "loans" ? "Cari petani, lahan, komoditas…" : "Cari petani, lahan, barang, komoditas…"} className="pl-9 w-72"
               value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
-        {view !== "document" && (
+        {view !== "document" && view !== "loans" && (
           <div className="p-4">
             <StockOutSummary group={view} query={{
               warehouse_id: warehouseId || undefined, entity_id: entityFilter || undefined,
               from: from || undefined, to: to || undefined, search: search || undefined,
+              scheme: scheme || undefined,
+            }} />
+          </div>
+        )}
+        {view === "loans" && (
+          <div className="p-4">
+            <LoanOverview query={{
+              entity_id: entityFilter || undefined, from: monthStart(from), to: monthEnd(to), search: search || undefined,
             }} />
           </div>
         )}
@@ -131,7 +161,7 @@ export default function StockOutList() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-slate-50 border-b border-slate-100">
-                {["Nomor", "Tanggal", ...(bound ? [] : ["Entitas"]), "Gudang", "Baris", "Total Qty", "Nilai", "Petugas"].map((h) => <th key={h} className={th}>{h}</th>)}
+                {["Nomor", "Tanggal", ...(bound ? [] : ["Entitas"]), "Gudang", "Peruntukan", "Baris", "Total Qty", "Nilai", "Petugas"].map((h) => <th key={h} className={th}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {list.map((r) => (
@@ -151,6 +181,11 @@ export default function StockOutList() {
                     <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{r.stock_out_date}</td>
                     {!bound && <td className="py-3 px-4"><EntityTag name={r.entity_name} /></td>}
                     <td className="py-3 px-4 text-sm text-slate-600">{r.warehouse_name || "—"}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      {/* A document can carry both: one day's issues to a Pre-Finance and a profit-sharing plot. */}
+                      {Number(r.amount_ps) < Number(r.total_amount) && <SchemeTag scheme="PreFinance" />}
+                      {Number(r.amount_ps) > 0 && <span className="ml-1"><SchemeTag scheme="ProfitSharing" /></span>}
+                    </td>
                     <td className="py-3 px-4 text-sm text-slate-600">{r.line_count}</td>
                     <td className="py-3 px-4 text-sm font-mono text-slate-700">{num(r.total_qty)}</td>
                     <td className="py-3 px-4 text-sm font-mono font-semibold text-amber-700">{fmtRp(r.total_amount)}</td>
@@ -158,7 +193,7 @@ export default function StockOutList() {
                   </tr>
                 ))}
                 {!list.length && (
-                  <tr><td colSpan={bound ? 7 : 8} className="py-10 text-center">
+                  <tr><td colSpan={bound ? 8 : 9} className="py-10 text-center">
                     <PackageMinus className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="text-sm text-slate-400">Belum ada stock out.</p>
                   </td></tr>

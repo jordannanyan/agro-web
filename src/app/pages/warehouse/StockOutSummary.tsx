@@ -19,14 +19,27 @@ const fmtDate = (d?: string | null) =>
 const short = (n?: string | null) => (n ? (n.match(/\(([^)]+)\)/)?.[1] ?? n) : "");
 
 interface Item { sapropdi_id: number | null; sapropdi_name: string; unit_name: string | null; qty: number; amount: number; line_count: number }
-interface PerCommodity { commodity_id: number | null; commodity_name: string; amount: number; items: Item[] }
+interface PerCommodity { commodity_id: number | null; commodity_name: string; scheme: string; amount: number; items: Item[] }
 interface Row {
   id: number | null; name: string; entity_names: string[]; farmer_name?: string | null;
   amount: number; line_count: number; doc_count: number; farmer_count: number;
   first_date: string; last_date: string;
   plots: { id: number; plot_name: string; planted: string[] }[];
   farmers?: string[];
+  by_scheme: Record<string, number>;
   by_commodity: PerCommodity[];
+}
+
+// What the goods were for. Taken from the line, not the plot: a plot that changed
+// scheme keeps the old one on what it received before the change.
+const SCHEME: Record<string, { label: string; cls: string }> = {
+  PreFinance:    { label: "Pre-Finance", cls: "bg-sky-50 text-sky-700 border-sky-200" },
+  ProfitSharing: { label: "Profit Sharing", cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  BeliPutus:     { label: "Beli Putus", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+};
+export function SchemeTag({ scheme }: { scheme: string }) {
+  const m = SCHEME[scheme] ?? SCHEME.BeliPutus;
+  return <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${m.cls}`}>{m.label}</span>;
 }
 
 const COLORS = ["bg-emerald-500", "bg-amber-500", "bg-sky-500", "bg-violet-500", "bg-rose-500", "bg-slate-400"];
@@ -77,6 +90,12 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
                     {group === "plot" && r.farmer_name && <span className="text-sm text-slate-500">· {r.farmer_name}</span>}
                     {!bound && r.entity_names.map((e) => <EntityTag key={e} name={e} />)}
                   </div>
+                  {/* Debt and profit-sharing cost, side by side — they are settled differently. */}
+                  <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
+                    {Object.entries(r.by_scheme || {}).sort((a, b) => b[1] - a[1]).map(([s, v]) => (
+                      <span key={s} className="inline-flex items-center gap-1"><SchemeTag scheme={s} /><span className="font-mono text-slate-600">{fmtRp(v)}</span></span>
+                    ))}
+                  </div>
                   {/* Where it went, and what grows there. */}
                   {group !== "commodity" && r.plots.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1.5">
@@ -99,13 +118,13 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
                     <div className="mt-2 max-w-xl">
                       <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100 gap-px">
                         {r.by_commodity.map((c, i) => (
-                          <div key={c.commodity_id ?? i} className={COLORS[i % COLORS.length]} style={{ width: `${r.amount ? (c.amount / r.amount) * 100 : 0}%` }} />
+                          <div key={`${c.commodity_id}-${c.scheme}`} className={COLORS[i % COLORS.length]} style={{ width: `${r.amount ? (c.amount / r.amount) * 100 : 0}%` }} />
                         ))}
                       </div>
                       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-600">
                         {r.by_commodity.map((c, i) => (
-                          <span key={c.commodity_id ?? i} className="inline-flex items-center gap-1">
-                            <span className={`w-2 h-2 rounded-sm ${COLORS[i % COLORS.length]}`} />{short(c.commodity_name)} {fmtRp(c.amount)}
+                          <span key={`${c.commodity_id}-${c.scheme}`} className="inline-flex items-center gap-1">
+                            <span className={`w-2 h-2 rounded-sm ${COLORS[i % COLORS.length]}`} />{short(c.commodity_name)}{Object.keys(r.by_scheme || {}).length > 1 ? ` · ${SCHEME[c.scheme]?.label ?? c.scheme}` : ""} {fmtRp(c.amount)}
                           </span>
                         ))}
                       </div>
@@ -124,11 +143,12 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
             {isOpen && (
               <div className="border-t border-slate-100 bg-slate-50/40 px-4 py-3 space-y-3">
                 {r.by_commodity.map((c, i) => (
-                  <div key={c.commodity_id ?? i}>
-                    {group !== "commodity" && (
+                  <div key={`${c.commodity_id}-${c.scheme}`}>
+                    {(
                       <div className="flex items-center justify-between mb-1">
                         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
                           <span className={`w-2 h-2 rounded-sm ${COLORS[i % COLORS.length]}`} />Untuk {short(c.commodity_name) || c.commodity_name}
+                          <SchemeTag scheme={c.scheme} />
                         </span>
                         <span className="text-xs font-mono text-slate-600">{fmtRp(c.amount)}</span>
                       </div>
