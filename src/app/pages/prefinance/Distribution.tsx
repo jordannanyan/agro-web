@@ -15,9 +15,21 @@ import { useAuth } from "../../store/AuthContext";
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
+// Loans imported from the ledgers have no sapropdi_id — they must not move stock —
+// and name the item in the description instead:
+//   "Pinjaman saprodi (tanpa no., baris 2078) - UREA (Fertilizer) 29.3 kg [JNBS-…]"
+//   "Pinjaman kakao SNBS · Fertiphos 100 kg · Jafar (…) [SNBS-…]"
+function itemFromDescription(d?: string | null) {
+  if (!d) return "";
+  const s = d.replace(/\s*\[[^\]]+\]\s*$/, "");
+  const m = s.match(/^Pinjaman saprodi \(tanpa no\.[^)]*\) - (.+?)(?: · .*)?$/) || s.match(/^Pinjaman kakao SNBS · ([^·]+)/);
+  return m ? m[1].trim() : "";
+}
+
 interface DistRow {
   id: number; date: string; type_name: string; farmer_name: string; plot_name: string | null;
   sapropdi_name: string | null; quantity: number | null; total_amount: number; shipped_at: string | null;
+  description?: string | null;
   scheme: string | null; warehouse_name: string | null;
   entity_id: number | null; entity_name: string | null;
 }
@@ -103,7 +115,7 @@ export default function Distribution() {
                   </td>
                   <td className="py-3 px-4 text-sm font-semibold text-slate-900">{r.farmer_name}</td>
                   <td className="py-3 px-4 text-sm text-slate-600">{r.plot_name || "—"}</td>
-                  <td className="py-3 px-4 text-sm text-slate-600">{r.sapropdi_name || "—"}</td>
+                  <td className="py-3 px-4 text-sm text-slate-600">{r.sapropdi_name || itemFromDescription(r.description) || "—"}</td>
                   <td className="py-3 px-4 text-sm text-slate-600">
                     {r.warehouse_name || (r.type_name === "Saprodi"
                       ? <span className="text-red-500" title="Tidak dikurangkan dari stok gudang mana pun">belum diisi</span>
