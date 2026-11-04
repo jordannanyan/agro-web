@@ -56,13 +56,17 @@ export default function Distribution() {
   const mayWrite = canWriteOperations(user);
   const [entityFilter, setEntityFilter] = useState("");
   const [search, setSearch] = useState("");
+  // Profit-sharing lines are on this screen too, but they are not debt — the
+  // filter lets the two be read (and totalled) apart.
+  const [scheme, setScheme] = useState("");
   // Both filters are sent to the server, so a farmer on page 12 is still found.
   const {
     rows: list, meta, page, setPage, perPage, setPerPage, loading, error, refetch,
   } = usePagedApi<DistRow>("pre-finance/distributions", {
     entity_id: entityFilter || undefined,
     search: search || undefined,
-  }, [entityFilter, search]);
+    scheme: scheme || undefined,
+  }, [entityFilter, search, scheme]);
   // Whole-set total, not the page's — the server sums the same filtered query.
   const total = Number((meta as any)?.totals?.total_amount ?? 0);
 
@@ -85,6 +89,11 @@ export default function Distribution() {
             Setiap barang yang tercatat sebagai utang petani, baris per baris — dari Stock Out gudang maupun pinjaman yang dicatat
             langsung dari buku besar. Untuk melihat barang keluar per petani, lahan, atau komoditas, buka Gudang → Stock Out.
           </p>
+          <p className="text-sm text-slate-500 mt-1">
+            Baris berskema <span className="font-semibold text-violet-700">Profit Sharing</span> bukan utang: biayanya dipotong dari
+            margin lahan bagi hasil saat penjualan, tidak dicicil per kg. Skema dicatat per baris menurut tanggalnya — lahan Mustari,
+            Eko Irawan, dan Yudis masih Pre-Finance sebelum 28 Agustus 2025.
+          </p>
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
         {/* Issuing goods is a warehouse act now — this page is the line-level record of it. */}
@@ -93,10 +102,17 @@ export default function Distribution() {
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Total Distribusi</p><p className="text-2xl font-bold text-slate-900">{(meta?.total ?? list.length).toLocaleString("id-ID")}</p></Card>
-        <Card className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Total Nilai (Utang)</p><p className="text-2xl font-bold text-amber-700">{fmtRp(total)}</p></Card>
+        <Card className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">{scheme === "ProfitSharing" ? "Total Nilai (Biaya Bagi Hasil)" : scheme ? "Total Nilai (Utang)" : "Total Nilai"}</p><p className="text-2xl font-bold text-amber-700">{fmtRp(total)}</p></Card>
       </div>
 
-      <Card className="p-4"><div className="relative max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Cari petani…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div></Card>
+      <Card className="p-4"><div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Cari petani…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+        <select aria-label="Skema" className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700" value={scheme} onChange={(e) => { setScheme(e.target.value); setPage(1); }}>
+          <option value="">Semua skema</option>
+          <option value="PreFinance">Pre-Finance (utang)</option>
+          <option value="ProfitSharing">Profit Sharing (biaya bagi hasil)</option>
+        </select>
+      </div></Card>
 
       <Card>
         <div className="overflow-x-auto">

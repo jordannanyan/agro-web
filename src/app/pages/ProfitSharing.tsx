@@ -112,13 +112,14 @@ function PLTab() {
           <h3 className="text-slate-800 font-semibold">Profit &amp; Loss per Lahan</h3>
           <p className="text-xs text-slate-400">
             Margin buku besar: bagian penjualan − harga beli − harvesting/kg − PNBP/kg.
-            Saprodi dan biaya lahan bukan biaya — keduanya utang yang menahan pembayaran.
+            Saprodi, tenaga kerja, dan biaya lahan bukan biaya — ketiganya utang yang menahan pembayaran. Hanya baris yang
+            dicatat berskema Profit Sharing yang masuk; pinjaman dari masa lahan masih Pre-Finance tetap utang per kg petani.
           </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
-              {["Plot", "Petani", "Kg Terjual", "Bagian Jual", "Harga Beli", "Harvesting", "PNBP", "Margin", "Utang (saprodi+lahan)", "Dibayar ke Petani"].map((h) =>
+              {["Plot", "Petani", "Kg Terjual", "Bagian Jual", "Harga Beli", "Harvesting", "PNBP", "Margin", "Utang (saprodi+TK+lahan)", "Dibayar ke Petani"].map((h) =>
                 <th key={h} className={th(h !== "Plot" && h !== "Petani")}>{h}</th>)}
             </tr></thead>
             <tbody>
