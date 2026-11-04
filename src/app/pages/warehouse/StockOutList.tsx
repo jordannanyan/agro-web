@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { PackageMinus, Plus, Search } from "lucide-react";
+import { PackageMinus, Plus, Search, User, MapPin, Sprout, FileText } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -9,6 +9,12 @@ import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/Enti
 import { usePagedApi, Pagination } from "../../components/Pagination";
 import { canWriteOperations } from "../../lib/permissions";
 import { useAuth } from "../../store/AuthContext";
+import StockOutSummary, { type Group } from "./StockOutSummary";
+
+type View = Group | "document";
+const VIEWS: [View, string, typeof User][] = [
+  ["farmer", "Per Petani", User], ["plot", "Per Lahan", MapPin], ["commodity", "Per Komoditas", Sprout], ["document", "Per Dokumen", FileText],
+];
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -30,6 +36,10 @@ export default function StockOutList() {
   // went there rather than joining and duplicating the row.
   const [plotId, setPlotId] = useState("");
   const [search, setSearch] = useState("");
+  // Read per farmer by default: "what did each farmer get" is what people ask.
+  const [view, setView] = useState<View>("farmer");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const bound = useEntityBound();
   const [entityFilter, setEntityFilter] = useState("");
   const { data: warehouses } = useApi<Warehouse[]>("warehouses", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
@@ -38,12 +48,12 @@ export default function StockOutList() {
   const mayWrite = canWriteOperations(user);
   const {
     rows: list, meta, page, setPage, perPage, setPerPage, loading, error,
-  } = usePagedApi<Row>("stock-out", {
+  } = usePagedApi<Row>(view === "document" ? "stock-out" : null, {
     warehouse_id: warehouseId || undefined,
     plot_id: plotId || undefined,
     entity_id: entityFilter || undefined,
     search: search || undefined,
-  }, [warehouseId, plotId, entityFilter, search]);
+  }, [warehouseId, plotId, entityFilter, search, view]);
 
   const th = "text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap";
 
@@ -53,7 +63,7 @@ export default function StockOutList() {
         <div>
           <h1 className="text-2xl text-slate-900 mb-1">Stock Out</h1>
           <p className="text-sm text-slate-500">
-            Barang keluar dari gudang ke petani — menggantikan Distribusi (Pre-Finance) dan Operational Investment (Profit Sharing).
+            Barang keluar dari gudang ke petani — lihat per petani, per lahan, atau per komoditas, atau per dokumen Stock Out.
           </p>
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
@@ -64,14 +74,23 @@ export default function StockOutList() {
         )}
       </div>
 
+      <div className="flex flex-wrap gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+        {VIEWS.map(([v, label, Icon]) => (
+          <button key={v} type="button" onClick={() => setView(v)}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium ${view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            <Icon className="w-4 h-4" />{label}
+          </button>
+        ))}
+      </div>
+
       <Card>
-        <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+        <div className="p-5 border-b border-slate-100 flex flex-wrap items-center gap-3">
           <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <option value="">Semua gudang</option>
             {(warehouses || []).map((w) => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
           </select>
-          <select value={plotId} onChange={(e) => setPlotId(e.target.value)}
+          {view === "document" && <select value={plotId} onChange={(e) => setPlotId(e.target.value)}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <option value="">Semua plot</option>
             {(plots || []).map((p) => (
@@ -79,17 +98,36 @@ export default function StockOutList() {
                 {p.plot_name || `Plot #${p.id}`}{p.farmer_name ? ` · ${p.farmer_name}` : ""}
               </option>
             ))}
-          </select>
+          </select>}
+          {view !== "document" && (
+            <div className="flex items-center gap-2 text-sm">
+              <input type="month" value={from} onChange={(e) => setFrom(e.target.value)} title="Dari bulan"
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <span className="text-slate-400">s/d</span>
+              <input type="month" value={to} onChange={(e) => setTo(e.target.value)} title="Sampai bulan"
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              {(from || to) && <button type="button" onClick={() => { setFrom(""); setTo(""); }} className="text-xs text-emerald-700 hover:underline">semua waktu</button>}
+            </div>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <Input placeholder="Cari nomor…" className="pl-9 w-56" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input placeholder={view === "document" ? "Cari nomor…" : "Cari petani, lahan, barang, komoditas…"} className="pl-9 w-72"
+              value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
+        {view !== "document" && (
+          <div className="p-4">
+            <StockOutSummary group={view} query={{
+              warehouse_id: warehouseId || undefined, entity_id: entityFilter || undefined,
+              from: from || undefined, to: to || undefined, search: search || undefined,
+            }} />
+          </div>
+        )}
 
-        {loading && <p className="p-6 text-sm text-slate-400">Memuat…</p>}
-        {error && <p className="p-6 text-sm text-red-500">{error}</p>}
+        {view === "document" && loading && <p className="p-6 text-sm text-slate-400">Memuat…</p>}
+        {view === "document" && error && <p className="p-6 text-sm text-red-500">{error}</p>}
 
-        {!loading && !error && (
+        {view === "document" && !loading && !error && (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-slate-50 border-b border-slate-100">
@@ -129,7 +167,7 @@ export default function StockOutList() {
             </table>
           </div>
         )}
-        <Pagination meta={meta} page={page} onPage={setPage} perPage={perPage} onPerPage={setPerPage} />
+        {view === "document" && <Pagination meta={meta} page={page} onPage={setPage} perPage={perPage} onPerPage={setPerPage} />}
       </Card>
     </div>
   );
