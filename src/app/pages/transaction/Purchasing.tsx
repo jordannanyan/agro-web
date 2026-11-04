@@ -160,7 +160,13 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
       toast.info(`${shortCommodity(sib.commodity_name)} lahan ini dicatat sebagai ${SCHEME_META[sib.scheme]?.label ?? sib.scheme}`);
     }
   }
-  const scheme: Scheme = supplierType === "collector" ? "BeliPutus" : (selectedPlot?.scheme ?? "BeliPutus");
+  // A delivery keeps the scheme it was made under (stored on the row); only a new
+  // delivery, or one moved to another plot, takes the plot's current scheme.
+  // Mustari's plots were Pre-Finance until 28 Aug 2025: editing one of those
+  // deliveries must not turn it into a zero-price profit-sharing delivery.
+  const keepsOwn = isEdit && !!editRow?.scheme && String(editRow?.plot?.id ?? "") === plotId;
+  const scheme: Scheme = supplierType === "collector" ? "BeliPutus"
+    : keepsOwn ? (editRow!.scheme as Scheme) : (selectedPlot?.scheme ?? "BeliPutus");
   const isPS = scheme === "ProfitSharing";
   const priceNum = isPS ? 0 : (parseFloat(price) || 0);
   const total = (parseFloat(quantity) || 0) * priceNum;
