@@ -99,6 +99,9 @@ const menuItems = [
     label: "Profit Sharing",
     subItems: [
       { id: "ps-investment", label: "Operational Investment", path: "/profit-sharing/investment" },
+      // The profit-sharing season's saprodi and labour, line by line — Pre-Finance
+      // keeps only what the farmer owes.
+      { id: "ps-costs",      label: "Biaya Saprodi & TK",     path: "/profit-sharing/costs" },
       { id: "ps-revenue",    label: "Revenue & Delivery",     path: "/profit-sharing/revenue" },
       { id: "ps-pl",         label: "Profit & Loss",          path: "/profit-sharing/pl" },
       { id: "ps-ps",         label: "Profit Sharing",         path: "/profit-sharing/ps" },

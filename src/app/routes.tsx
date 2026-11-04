@@ -52,6 +52,7 @@ const ClaimsRedirect = () => <Navigate to="/reimbursement" replace />;
 // Riwayat Barang Keluar moved from Gudang to Pre-Finance as "Rincian Utang Saprodi"
 // (2026-11-04): old links and bookmarks still land on it.
 const DebtLinesRedirect = () => <Navigate to="/prefinance/distribution" replace />;
+const ProfitSharingCosts = () => <Distribution kind="ps" />;
 
 export const router = createBrowserRouter([
   { path: "/login", Component: Login },
@@ -154,6 +155,7 @@ export const router = createBrowserRouter([
       // ── Profit Sharing sub-pages ──────────────────────────────────────────
       { path: "profit-sharing",                Component: ProfitSharingPage },
       { path: "profit-sharing/investment",     Component: ProfitSharingPage },
+      { path: "profit-sharing/costs",          Component: ProfitSharingCosts },
       { path: "profit-sharing/revenue",        Component: ProfitSharingPage },
       { path: "profit-sharing/pl",             Component: ProfitSharingPage },
       { path: "profit-sharing/ps",             Component: ProfitSharingPage },

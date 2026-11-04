@@ -17,6 +17,27 @@ interface Row {
   saprodi_pf: number; labour_pf: number; other_pf: number; debt_total: number;
   paid_saprodi: number; paid_labour: number; paid_other: number; paid_total: number; remaining: number;
   saprodi_ps: number; labour_ps: number; ps_total: number;
+  // The scheme the line's money was booked under, and when.
+  row_scheme: "PreFinance" | "ProfitSharing"; first_date: string | null; last_date: string | null;
+}
+
+// Which scheme a row belongs to. A plot that moved from Pre-Finance to profit
+// sharing (Mustari, Eko Irawan, Yudis — 29 Aug 2025) comes as two rows: its loan
+// from before the change, and its season's cost after it.
+const fmtD = (d?: string | null) =>
+  d ? new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "";
+function SchemeCell({ r, switched }: { r: Row; switched: boolean }) {
+  if (r.plot_id == null) return <span className="text-[11px] text-slate-400">cicilan tunai</span>;
+  const tag = (label: string, cls: string) => <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${cls}`}>{label}</span>;
+  const ps = r.row_scheme === "ProfitSharing";
+  return (
+    <span className="inline-flex flex-col gap-0.5">
+      {ps ? tag("Profit Sharing", "bg-violet-50 text-violet-700 border-violet-200")
+        : tag(r.plot_scheme === "BeliPutus" ? "Beli Putus" : "Pre-Finance", "bg-sky-50 text-sky-700 border-sky-200")}
+      {switched && <span className="text-[10px] text-slate-500 whitespace-nowrap">{ps ? `mulai 29 Agu 2025` : `s/d 28 Agu 2025`}</span>}
+      {!switched && r.first_date && <span className="text-[10px] text-slate-400 whitespace-nowrap">{fmtD(r.first_date)} – {fmtD(r.last_date)}</span>}
+    </span>
+  );
 }
 
 const rp = (n: number) => (Number(n || 0) === 0 ? "–" : Number(n).toLocaleString("id-ID", { maximumFractionDigits: 0 }));
@@ -26,6 +47,7 @@ export default function LoanOverview({ query }: { query: Record<string, string |
   const bound = useEntityBound();
   const { data, loading, error } = useApi<Row[]>("pre-finance/outstanding/overview", query, [JSON.stringify(query)]);
   const [com, setCom] = useState("");
+  const [sch, setSch] = useState<"" | "pf" | "ps">("");
   const all: Row[] = data || [];
   // One tab per commodity, like the sheets: Pisang, Mangga, Kopi, …
   const commodities = useMemo(() => {
@@ -35,7 +57,15 @@ export default function LoanOverview({ query }: { query: Record<string, string |
   }, [all]);
   // Repayments with no delivery behind them belong to no plot and no crop, so
   // they stay on every tab — they pay down the farmer's debt as a whole.
-  const rows = all.filter((r) => !com || r.commodity_name === com || (r.plot_id == null && r.commodity_name == null));
+  // Plots that appear under both schemes — the ones that changed.
+  const switchedPlots = useMemo(() => {
+    const seen = new Map<number, Set<string>>();
+    for (const r of all) if (r.plot_id != null) seen.set(r.plot_id, (seen.get(r.plot_id) || new Set()).add(r.row_scheme));
+    return new Set([...seen].filter(([, v]) => v.size > 1).map(([k]) => k));
+  }, [all]);
+  const rows = all
+    .filter((r) => !com || r.commodity_name === com || (r.plot_id == null && r.commodity_name == null))
+    .filter((r) => !sch || (sch === "ps" ? r.row_scheme === "ProfitSharing" : r.row_scheme !== "ProfitSharing"));
   const sum = (k: keyof Row) => rows.reduce((s, r) => s + Number(r[k] || 0), 0);
 
   if (loading) return <Card className="p-10 text-center text-sm text-slate-400">Memuat…</Card>;
@@ -45,6 +75,15 @@ export default function LoanOverview({ query }: { query: Record<string, string |
   const td = "py-2 px-3 text-right font-mono text-sm whitespace-nowrap";
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+        {(["", "pf", "ps"] as const).map((s) => (
+          <button key={s || "all"} type="button" onClick={() => setSch(s)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${sch === s ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            {s === "" ? "Semua skema" : s === "pf" ? "Pre-Finance" : "Profit Sharing"}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap items-center gap-1 bg-slate-100 rounded-xl p-1 w-fit">
         {["", ...commodities].map((c) => (
           <button key={c || "all"} type="button" onClick={() => setCom(c)}
@@ -52,6 +91,7 @@ export default function LoanOverview({ query }: { query: Record<string, string |
             {c ? short(c) : "Semua komoditas"}
           </button>
         ))}
+      </div>
       </div>
       <p className="text-xs text-slate-500 px-1">
         Sama dengan sheet <b>Farmer Loan Overview</b> di JNBS Database: utang = pinjaman saprodi + tenaga kerja berskema
@@ -66,6 +106,7 @@ export default function LoanOverview({ query }: { query: Record<string, string |
               <th className={`${th} text-left`} rowSpan={2}>Nama Petani</th>
               <th className={`${th} text-left`} rowSpan={2}>Plot ID</th>
               <th className={`${th} text-left`} rowSpan={2}>Komoditas</th>
+              <th className={`${th} text-left`} rowSpan={2}>Skema</th>
               <th className={`${th} text-center border-l border-slate-200 text-sky-700`} colSpan={3}>Utang Pre-Finance</th>
               <th className={`${th} text-center border-l border-slate-200`} colSpan={3}>Cicilan Terbayar</th>
               <th className={`${th} text-right border-l border-slate-200`} rowSpan={2}>Sisa Cicilan</th>
@@ -79,15 +120,15 @@ export default function LoanOverview({ query }: { query: Record<string, string |
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={`${r.farmer_id}-${r.plot_id}-${r.commodities_id}`} className="border-b border-slate-50 hover:bg-slate-50/50">
+              <tr key={`${r.farmer_id}-${r.plot_id}-${r.commodities_id}-${r.row_scheme}`} className="border-b border-slate-50 hover:bg-slate-50/50">
                 <td className="py-2 px-3 text-sm font-semibold text-slate-900 whitespace-nowrap">
                   {r.farmer_name}{!bound && r.entity_name && <span className="ml-1.5"><EntityTag name={r.entity_name} /></span>}
                 </td>
                 <td className="py-2 px-3 text-sm text-slate-700 whitespace-nowrap">
                   {r.plot_name ?? <span className="text-slate-400 italic" title="Cicilan tunai dari buku cicilan TK, tidak terkait setoran panen lahan mana pun">tanpa lahan</span>}
-                  {r.plot_scheme === "ProfitSharing" && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">PS</span>}
                 </td>
                 <td className="py-2 px-3 text-sm text-slate-600 whitespace-nowrap">{short(r.commodity_name) || "—"}</td>
+                <td className="py-2 px-3"><SchemeCell r={r} switched={r.plot_id != null && switchedPlots.has(r.plot_id)} /></td>
                 <td className={`${td} border-l border-slate-100 text-slate-700`}>{rp(r.saprodi_pf + r.other_pf)}</td>
                 <td className={`${td} text-slate-700`}>{rp(r.labour_pf)}</td>
                 <td className={`${td} font-semibold text-slate-900`}>{rp(r.debt_total)}</td>
@@ -99,12 +140,12 @@ export default function LoanOverview({ query }: { query: Record<string, string |
                 <td className={`${td} text-violet-700`}>{rp(r.labour_ps)}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={12} className="p-10 text-center text-sm text-slate-400">Tidak ada data untuk filter ini.</td></tr>}
+            {!rows.length && <tr><td colSpan={13} className="p-10 text-center text-sm text-slate-400">Tidak ada data untuk filter ini.</td></tr>}
           </tbody>
           {rows.length > 0 && (
             <tfoot>
               <tr className="bg-slate-50 border-t-2 border-slate-200">
-                <td className="py-2.5 px-3 text-sm font-bold text-slate-900" colSpan={3}>Total ({rows.length} baris)</td>
+                <td className="py-2.5 px-3 text-sm font-bold text-slate-900" colSpan={4}>Total ({rows.length} baris)</td>
                 <td className={`${td} border-l border-slate-200 font-bold`}>{rp(sum("saprodi_pf") + sum("other_pf"))}</td>
                 <td className={`${td} font-bold`}>{rp(sum("labour_pf"))}</td>
                 <td className={`${td} font-bold`}>{rp(sum("debt_total"))}</td>
