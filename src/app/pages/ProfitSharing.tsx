@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 import { useApi } from "../lib/hooks";
 import { useAuth } from "../store/AuthContext";
 import { canWriteProfitSharing } from "../lib/permissions";
+import ProfitSharePayout from "./ProfitSharePayout";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits: 0 });
@@ -209,9 +210,7 @@ function ShareTab() {
   const totalFarmer = lines.reduce((s, l) => s + Number(l.value_farmer || 0), 0);
   const totalKth = lines.reduce((s, l) => s + Number(l.value_kth || 0), 0);
   const totalCompany = lines.reduce((s, l) => s + Number(l.value_company || 0), 0);
-  const totalPayable = lines.reduce((s, l) => s + Number(l.payable_farmer || 0), 0);
-  // The farmer's remaining Pre-Finance debt comes out of what may be paid first.
-  const totalPfCut = lines.reduce((s, l) => s + Number(l.pf_deduction || 0), 0);
+
   // The KTH's rate is a cut of the company's portion, so the box names both it
   // and what it works out to against the margin (7% of 70% = 4,9%).
   const kthLabel = !preview?.pct_kth
@@ -266,7 +265,7 @@ function ShareTab() {
             <div className="overflow-x-auto border border-slate-100 rounded-xl">
               <table className="w-full">
                 <thead><tr className="bg-slate-50 border-b border-slate-100">
-                  {["Plot", "Petani", "Kg", "Porsi", "Bagian Jual", "Total Biaya", "Laba (NCF)", "Petani", "KTH", "Perusahaan", "Saldo Petani", "Boleh Dibayar", "Potong Utang PF", "Diterima Petani"].map((h) =>
+                  {["Plot", "Petani", "Kg", "Porsi", "Bagian Jual", "Total Biaya", "Laba (NCF)", "Petani", "KTH", "Perusahaan", "Saldo Petani"].map((h) =>
                     <th key={h} className={th(h !== "Plot" && h !== "Petani")}>{h}</th>)}
                 </tr></thead>
                 <tbody>
@@ -284,12 +283,6 @@ function ShareTab() {
                       <td className={`py-3 px-4 text-right text-sm font-mono ${Number(l.value_kth) >= 0 ? "text-slate-600" : "text-red-500"}`}>{fmtRp(l.value_kth)}</td>
                       <td className={`py-3 px-4 text-right text-sm font-mono ${Number(l.value_company) >= 0 ? "text-slate-600" : "text-red-500"}`}>{fmtRp(l.value_company)}</td>
                       <td className={`py-3 px-4 text-right text-sm font-mono ${Number(l.cum_farmer) >= 0 ? "text-slate-700" : "text-red-600"}`}>{fmtRp(l.cum_farmer)}</td>
-                      <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{fmtRp(l.payable_gross)}</td>
-                      <td className="py-3 px-4 text-right text-sm font-mono text-sky-700"
-                          title={Number(l.pf_outstanding) > 0 ? `Sisa utang Pre-Finance ${l.farmer_name} sebelum potongan ini: ${fmtRp(l.pf_outstanding)}` : "Tidak ada sisa utang Pre-Finance"}>
-                        {Number(l.pf_deduction) > 0 ? `− ${fmtRp(l.pf_deduction)}` : "—"}
-                      </td>
-                      <td className="py-3 px-4 text-right text-sm font-mono font-bold text-emerald-700">{fmtRp(l.payable_farmer)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -304,13 +297,9 @@ function ShareTab() {
               keduanya utang yang menentukan boleh-tidaknya dibayarkan.
               <strong>Laba</strong> dibagi apa adanya: rugi pun ikut dibagi dengan persentase yang sama, lalu
               ditumpuk di <strong>Saldo Petani</strong>.{" "}
-              <strong>Bisa Dibayar</strong> baru terisi setelah laba kumulatif lahan melampaui utangnya —
-              saldo positif saja tidak cukup. Aturannya mengikuti buku besar PT yang bersangkutan:
-              SNBS memotong utang dari basis lalu membagi persentasenya, JNBS memakai utang sebagai
-              saklar lalu membayarkan seluruh saldo.{" "}
-              Dari yang <strong>Boleh Dibayar</strong>, sisa utang <strong>Pre-Finance</strong> petani dipotong dulu
-              (mis. pinjaman lahan sebelum menjadi bagi hasil) dan dicatat sebagai cicilan;
-              sisanya <strong>Diterima Petani</strong>.
+              Di sini belum ada yang dibayarkan: setiap penjualan hanya menambah saldo. Pembayaran ke petani
+              dilakukan sekali di akhir, lewat <strong>Bayar Bagi Hasil</strong> di bawah — hanya bila lahan sudah
+              untung, dan sisa utang <strong>Pre-Finance</strong> petani dipotong lebih dulu.
             </p>
 
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -326,16 +315,6 @@ function ShareTab() {
                 <div className="px-4 py-2 rounded-lg bg-slate-100">
                   <span className="text-xs text-slate-500 block">Perusahaan</span>
                   <span className={`font-mono font-bold ${totalCompany >= 0 ? "text-slate-800" : "text-red-600"}`}>{fmtRp(totalCompany)}</span>
-                </div>
-                {totalPfCut > 0 && (
-                  <div className="px-4 py-2 rounded-lg bg-sky-50 border border-sky-200">
-                    <span className="text-xs text-sky-700 block">Potong utang Pre-Finance</span>
-                    <span className="font-mono font-bold text-sky-700">− {fmtRp(totalPfCut)}</span>
-                  </div>
-                )}
-                <div className="px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <span className="text-xs text-emerald-700 block">Diterima petani</span>
-                  <span className="font-mono font-bold text-emerald-700">{fmtRp(totalPayable)}</span>
                 </div>
               </div>
               {mayWrite ? (
@@ -357,6 +336,8 @@ function ShareTab() {
           </>
         )}
       </Card>
+
+      <ProfitSharePayout mayWrite={mayWrite} />
 
       <Card className="p-0">
         <div className="p-5 border-b border-slate-100">
