@@ -19,6 +19,7 @@ interface Item {
   sapropdi_name: string | null;
   pr_item_description?: string | null;
   received_qty: number;
+  unit_price?: number | null;
   order_qty?: number | null;
   item_condition: string;
   remarks: string | null;
@@ -124,6 +125,12 @@ export default function StockInView() {
                         {it.sapropdi_name || it.pr_item_description || "Item"}
                       </p>
                       {it.remarks && <p className="text-xs text-slate-500 mt-0.5">{it.remarks}</p>}
+                      {it.unit_price != null && (
+                        <p className="text-xs text-slate-500 mt-0.5 font-mono">
+                          {num(it.received_qty)} × Rp {Number(it.unit_price).toLocaleString("id-ID")} ={" "}
+                          <b className="text-slate-800">Rp {(Number(it.received_qty) * Number(it.unit_price)).toLocaleString("id-ID", { maximumFractionDigits: 0 })}</b>
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="text-sm font-mono text-slate-700">

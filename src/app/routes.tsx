@@ -17,6 +17,7 @@ import ReimbursementView from "./pages/reimbursement/ReimbursementView";
 import MapMonitoring from "./pages/MapMonitoring";
 import WarehouseDashboardSimple from "./pages/warehouse/WarehouseDashboardSimple";
 import StockManagement from "./pages/warehouse/StockManagement";
+import StockInList from "./pages/warehouse/StockInList";
 import StockInCreate from "./pages/warehouse/StockInCreate";
 import StockInView from "./pages/warehouse/StockInView";
 import StockOutList from "./pages/warehouse/StockOutList";
@@ -108,7 +109,7 @@ export const router = createBrowserRouter([
       { path: "warehouse",                     Component: WarehouseDashboardSimple },
       { path: "warehouse/dashboard",           Component: WarehouseDashboardSimple },
       { path: "warehouse/stock-list",          Component: StockManagement },
-      { path: "warehouse/stock-in",            Component: StockManagement },
+      { path: "warehouse/stock-in",            Component: StockInList },
       { path: "warehouse/stock-out",           Component: StockOutList },
       { path: "warehouse/stock-out/create",    Component: StockOutCreate },
       { path: "warehouse/stock-out/riwayat",   Component: DebtLinesRedirect },
