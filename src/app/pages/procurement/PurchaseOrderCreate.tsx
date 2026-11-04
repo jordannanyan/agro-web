@@ -9,7 +9,7 @@ import { useApi } from "../../lib/hooks";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 import { ShowUsedSources } from "../../components/ShowUsedSources";
 import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
-import { BudgetCodeOptions } from "../../components/BudgetCodeOptions";
+import { BudgetCodeSelect } from "../../components/BudgetCodeOptions";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -242,9 +242,7 @@ export default function PurchaseOrderCreate() {
                   </p>
                 </>
               ) : (
-                <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}>
-                  <option value="">—</option><BudgetCodeOptions codes={budgetCodes} selected={budgetCodeId} />
-                </select>
+                <BudgetCodeSelect codes={budgetCodes} value={budgetCodeId} onChange={setBudgetCodeId} className={selectCls} />
               )}
             </div>
             <div><label className="text-xs text-slate-500 font-medium mb-1.5 block">Tanggal Order</label><Input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} /></div>
@@ -277,10 +275,8 @@ export default function PurchaseOrderCreate() {
                     {/* Per line, not per order: a request may span several budgets and
                         the order has to carry them through rather than flatten them. */}
                     <td className="py-2 px-3 w-56">
-                      <select value={it.budget_code_id} onChange={(e) => upd(it.key, "budget_code_id", e.target.value)} className={selectCls}>
-                        <option value="">—</option>
-                        <BudgetCodeOptions codes={budgetCodes} selected={it.budget_code_id} />
-                      </select>
+                      <BudgetCodeSelect codes={budgetCodes} value={it.budget_code_id} compact className={selectCls}
+                        onChange={(id) => upd(it.key, "budget_code_id", id)} />
                     </td>
                     <td className="py-2 px-3 w-28"><Input type="number" className="text-right" value={it.order_qty} onChange={(e) => upd(it.key, "order_qty", e.target.value)} placeholder="0" /></td>
                     <td className="py-2 px-3 w-32"><Input type="number" className="text-right" value={it.unit_price} onChange={(e) => upd(it.key, "unit_price", e.target.value)} placeholder="0" /></td>

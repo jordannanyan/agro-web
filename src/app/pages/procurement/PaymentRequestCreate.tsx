@@ -10,7 +10,7 @@ import { EntityField } from "../../components/EntityField";
 import { SourceDocumentPreview } from "../../components/SourceDocumentPreview";
 import { ShowUsedSources } from "../../components/ShowUsedSources";
 import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
-import { BudgetCodeOptions } from "../../components/BudgetCodeOptions";
+import { BudgetCodeSelect } from "../../components/BudgetCodeOptions";
 
 interface BudgetCode { id: number; code: string; main_account?: string | null; sub_account?: string | null; is_active?: number | null; }
 interface PROption { id: number; pr_number: string; entity_id: number; entity_name?: string | null; grand_total: number; }
@@ -409,7 +409,7 @@ export default function PaymentRequestCreate() {
                 </>
               ) : (
                 <>
-                  <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}><option value="">— pilih —</option><BudgetCodeOptions codes={budgetCodes} selected={budgetCodeId} /></select>
+                  <BudgetCodeSelect codes={budgetCodes} value={budgetCodeId} onChange={setBudgetCodeId} className={selectCls} />
                   {srcBudget.id != null && (
                     <p className="text-[11px] text-amber-600 mt-1">Berbeda dari kode dokumen sumber ({srcBudget.code}).</p>
                   )}

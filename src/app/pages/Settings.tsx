@@ -107,6 +107,8 @@ export default function Settings() {
     { name: "code", label: "Kode (NN-Main - Sub)", required: true, colSpan: 2, placeholder: "01-Operational Expenditures - Maintenance" },
     { name: "main_account", label: "Main account", placeholder: "Operational Expenditures" },
     { name: "sub_account", label: "Sub account", placeholder: "Maintenance" },
+    // COA column `Role`: which team's pickers offer the code. Empty = everyone.
+    { name: "roles", label: "Role (PPIC, Finance, HRD)", placeholder: "PPIC,Finance,HRD" },
     { name: "name", label: "Nama", hideInTable: true },
     { name: "sort_order", label: "Urutan", type: "number", hideInTable: true },
     { name: "is_active", label: "Status", type: "switch", default: 1 },

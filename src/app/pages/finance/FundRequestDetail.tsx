@@ -20,7 +20,7 @@ import { Button } from "../../components/ui/button";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { refreshInbox } from "../../lib/inbox";
-import { BudgetCodeOptions } from "../../components/BudgetCodeOptions";
+import { BudgetCodeSelect, budgetGroupForSection } from "../../components/BudgetCodeOptions";
 import {
   FundRequest, FrLine, FrGroup, Section, SectionKey, StageBadge, MoneyInput, TextCell,
   SECTION_LABEL, SECTION_OWNER, periodLabel, rp, sgd, signedRp, fmtDate, fmtTime,
@@ -157,10 +157,12 @@ function BudgetTable({ lines, section, groupId, kind, editable, rate, mutate, fr
   return (
     <div className="mt-2">
       <div className="border border-slate-200 rounded-xl overflow-x-auto">
-        <table className="w-full min-w-[980px]">
+        <table className="w-full min-w-[1320px]">
           <thead><tr className="bg-slate-50 text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">
-            <th className="text-left px-3 py-2 w-64">Budget code</th>
-            <th className="text-left px-3 py-2">Deskripsi</th>
+            {/* COA: a Main Account, then a Sub Account under it — one code. */}
+            <th className="text-left px-3 py-2 w-52">Budget Outflow — Main Account</th>
+            <th className="text-left px-3 py-2 w-60">Sub Account</th>
+            <th className="text-left px-3 py-2 min-w-[260px]">Deskripsi</th>
             <th className="text-right px-3 py-2 w-40">IDR</th>
             <th className="text-right px-3 py-2 w-28">SGD</th>
             {showActual && <><th className="text-right px-3 py-2 w-32">Realloc.</th><th className="text-right px-3 py-2 w-36">Actual</th><th className="text-right px-3 py-2 w-36">Remaining</th></>}
@@ -172,13 +174,10 @@ function BudgetTable({ lines, section, groupId, kind, editable, rate, mutate, fr
             {rows.map((l) => (
               <tr key={l.id} className={`border-t border-slate-100 ${l.source_line_id ? "bg-emerald-50/50 shadow-[inset_3px_0_0_#10b981]" : ""}`}
                 title={l.source_line_id ? `Remaining ${periodLabel(l.source_period)} yang di-shift` : undefined}>
-                <td className="px-1">
-                  <select value={l.budget_code_id ?? ""} disabled={!l.editable} onChange={(e) => save(l, { budget_code_id: e.target.value || null })}
-                    className="w-full bg-transparent text-[12px] px-2 py-1.5 rounded-md outline-none disabled:text-slate-600">
-                    <option value="">— pilih —</option>
-                    <BudgetCodeOptions codes={budgetCodes} selected={l.budget_code_id} />
-                  </select>
-                </td>
+                <BudgetCodeSelect codes={budgetCodes} value={l.budget_code_id} disabled={!l.editable} cells cellClassName="px-1"
+                  group={budgetGroupForSection(l.section_key)} placeholder="— pilih sub account —"
+                  onChange={(id) => save(l, { budget_code_id: id || null })}
+                  className="w-full bg-transparent text-[12px] px-2 py-1.5 rounded-md outline-none border border-transparent hover:border-slate-200 disabled:text-slate-600" />
                 <td className="px-1"><TextCell value={l.description} disabled={!l.editable} placeholder={placeholder} onCommit={(v) => save(l, { description: v })} /></td>
                 <td className="px-1"><MoneyInput value={l.amount} disabled={!l.editable || !!l.source_line_id} onCommit={(n) => save(l, { amount: n })} /></td>
                 <td className="px-3 text-right font-mono text-[12px] text-slate-400 whitespace-nowrap">{rate > 0 ? (l.idr / rate).toLocaleString("en-SG", { maximumFractionDigits: 1 }) : "—"}</td>
@@ -203,7 +202,7 @@ function BudgetTable({ lines, section, groupId, kind, editable, rate, mutate, fr
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={showActual ? 10 : 7} className="px-3 py-3 text-xs text-slate-400 italic">Belum ada item.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={showActual ? 11 : 8} className="px-3 py-3 text-xs text-slate-400 italic">Belum ada item.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -262,10 +261,10 @@ function LineDetail({ line, fr, onClose, mutate, budgetCodes, profitCenters, spe
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          <div><label className={lbl}>Budget code</label>
-            <select value={line.budget_code_id ?? ""} disabled={!ed} onChange={(e) => save({ budget_code_id: e.target.value || null })} className={fld}>
-              <option value="">— pilih —</option><BudgetCodeOptions codes={budgetCodes} selected={line.budget_code_id} />
-            </select></div>
+          <div><label className={lbl}>Budget code — Main Account · Sub Account</label>
+            <BudgetCodeSelect codes={budgetCodes} value={line.budget_code_id} disabled={!ed} className={fld}
+              group={budgetGroupForSection(line.section_key)}
+              onChange={(id) => save({ budget_code_id: id || null })} /></div>
           <Text k="reason" label="Reason / note" />
           <div className="grid grid-cols-2 gap-3">
             <Text k="period_to_be_paid" label="Period (to be) paid" ph="mis. Agustus 2026" />

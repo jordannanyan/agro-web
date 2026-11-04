@@ -21,7 +21,7 @@ import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { RequiredAttachments, uploadPicked } from "../../components/RequiredAttachments";
-import { BudgetCodeOptions } from "../../components/BudgetCodeOptions";
+import { BudgetCodeSelect } from "../../components/BudgetCodeOptions";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -324,11 +324,8 @@ export default function ReimbursementCreate() {
               </select>
             </div>
             <div>
-              <label className={label}>Project Code</label>
-              <select value={budgetCodeId} onChange={(e) => setBudgetCodeId(e.target.value)} className={selectCls}>
-                <option value="">— tanpa kode —</option>
-                <BudgetCodeOptions codes={budgetCodes} selected={budgetCodeId} />
-              </select>
+              <label className={label}>Budget Code — Main Account · Sub Account</label>
+              <BudgetCodeSelect codes={budgetCodes} value={budgetCodeId} onChange={setBudgetCodeId} className={selectCls} placeholder="— tanpa kode —" />
             </div>
           </div>
 
