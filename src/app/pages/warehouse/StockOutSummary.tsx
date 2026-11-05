@@ -68,6 +68,7 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-sm text-slate-600">
           <b className="text-slate-900">{rows.length}</b> {noun} menerima barang senilai <b className="text-slate-900">{fmtRp(total)}</b>
+          <span className="text-slate-500"> — <b>semua komoditas</b> (pisang, kopi, mangga, balsa, …), dipisah per komoditas & skema di tiap kartu</span>
         </p>
         <div className="flex gap-2">
           <button type="button" onClick={() => setOpen(new Set(rows.map((r) => String(r.id))))} className="text-xs text-emerald-700 hover:underline">Buka semua</button>
@@ -123,10 +124,18 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
                           <div key={`${c.commodity_id}-${c.scheme}`} className={COLORS[i % COLORS.length]} style={{ width: `${r.amount ? (c.amount / r.amount) * 100 : 0}%` }} />
                         ))}
                       </div>
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-600">
+                      {/* Crop and scheme, large: this list covers every commodity, not only
+                          banana, and each crop is repaid on its own terms. */}
+                      <div className="mt-2 flex flex-wrap gap-2">
                         {r.by_commodity.map((c, i) => (
-                          <span key={`${c.commodity_id}-${c.scheme}`} className="inline-flex items-center gap-1">
-                            <span className={`w-2 h-2 rounded-sm ${COLORS[i % COLORS.length]}`} />{short(c.commodity_name)}{Object.keys(r.by_scheme || {}).length > 1 ? ` · ${SCHEME[c.scheme]?.label ?? c.scheme}` : ""} {fmtRp(c.amount)}
+                          <span key={`${c.commodity_id}-${c.scheme}`}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                            <span className={`w-2.5 h-2.5 rounded-sm ${COLORS[i % COLORS.length]}`} />
+                            <span className="text-sm font-bold text-slate-900">{short(c.commodity_name) || "Tanpa komoditas"}</span>
+                            <span className={`text-xs font-semibold ${c.scheme === "ProfitSharing" ? "text-violet-700" : c.scheme === "PreFinance" ? "text-sky-700" : "text-slate-500"}`}>
+                              {SCHEME[c.scheme]?.label ?? c.scheme}
+                            </span>
+                            <span className="text-sm font-mono text-slate-700">{fmtRp(c.amount)}</span>
                           </span>
                         ))}
                       </div>
@@ -148,11 +157,13 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
                   <div key={`${c.commodity_id}-${c.scheme}`}>
                     {(
                       <div className="flex items-center justify-between mb-1">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                          <span className={`w-2 h-2 rounded-sm ${COLORS[i % COLORS.length]}`} />Untuk {short(c.commodity_name) || c.commodity_name}
-                          <SchemeTag scheme={c.scheme} />
+                        <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-800">
+                          <span className={`w-2.5 h-2.5 rounded-sm ${COLORS[i % COLORS.length]}`} />Untuk {short(c.commodity_name) || c.commodity_name}
+                          <span className={`text-xs font-semibold ${c.scheme === "ProfitSharing" ? "text-violet-700" : c.scheme === "PreFinance" ? "text-sky-700" : "text-slate-500"}`}>
+                            {SCHEME[c.scheme]?.label ?? c.scheme}
+                          </span>
                         </span>
-                        <span className="text-xs font-mono text-slate-600">{fmtRp(c.amount)}</span>
+                        <span className="text-sm font-mono font-semibold text-slate-700">{fmtRp(c.amount)}</span>
                       </div>
                     )}
                     <table className="w-full text-sm bg-white rounded-lg border border-slate-100 overflow-hidden">
