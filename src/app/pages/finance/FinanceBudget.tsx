@@ -14,6 +14,7 @@ import { ExportMenu } from "../../components/ExportMenu";
 import { EntityTag } from "../../components/EntityScope";
 import { rp, periodLabel } from "./frShared";
 import { exportCsv, FinanceFilters, useFinanceFilters } from "./financeFilters";
+import { useClientPage } from "../../components/Pagination";
 
 interface Row {
   id: number; fund_request_id: number; fr_number: string; period: string; stage: string; status: string;
@@ -43,6 +44,7 @@ export default function FinanceBudget() {
     return [...m.entries()];
   }, [rows, groupBy]);
 
+  const pg = useClientPage(groups);
   const kpi = [
     { label: "Total budget (disetujui)", value: rp(sum(approved, "budget")) },
     { label: "Budget bulan ini", value: rp(sum(approved.filter((r) => r.period === thisMonth), "budget")) },
@@ -87,7 +89,7 @@ export default function FinanceBudget() {
               <th className={`${th} text-right`}>Budget</th><th className={`${th} text-right`}>Actual</th><th className={`${th} text-right`}>Remaining</th><th className={th} />
             </tr></thead>
             <tbody>
-              {groups.map(([k, rs]) => (
+              {pg.pageRows.map(([k, rs]) => (
                 <Fragment key={`g-${k}`}>
                   {groupBy !== "none" && (
                     <tr className="bg-slate-50/70 border-y border-slate-100">
@@ -116,7 +118,7 @@ export default function FinanceBudget() {
                 </Fragment>
               ))}
             </tbody>
-          </table>
+          </table>{pg.pager}
         </div>
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
         {!loading && rows.length === 0 && <div className="p-16 text-center"><Wallet className="w-12 h-12 text-slate-300 mx-auto mb-4" /><p className="text-slate-500 font-medium">Belum ada budget</p><p className="text-sm text-slate-400 mt-1">Budget muncul setelah Fund Request disetujui HQ.</p></div>}

@@ -6,6 +6,7 @@ import { useApi } from "../lib/hooks";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
+import { useClientPage } from "./Pagination";
 
 export interface FieldDef {
   name: string;
@@ -117,6 +118,7 @@ function EditModal({ fields, row, onClose, onSave }: { fields: FieldDef[]; row: 
 
 export function MasterCrud({ endpoint, title, fields, query, readOnly, emptyText }: Props) {
   const { data, loading, error, refetch } = useApi<any[]>(endpoint, query);
+  const pg = useClientPage(data);
   const [editing, setEditing] = useState<{ row: any | null } | null>(null);
 
   const cols = fields.filter((f) => !f.hideInTable);
@@ -176,7 +178,7 @@ export function MasterCrud({ endpoint, title, fields, query, readOnly, emptyText
             </tr>
           </thead>
           <tbody>
-            {(data || []).map((row) => (
+            {pg.pageRows.map((row) => (
               <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                 {cols.map((f) => <td key={f.name} className="py-3 px-4 text-sm text-slate-700">{renderCell(f, row)}</td>)}
                 {!readOnly && (
@@ -190,7 +192,7 @@ export function MasterCrud({ endpoint, title, fields, query, readOnly, emptyText
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>{pg.pager}
         {loading && <div className="p-10 text-center text-slate-400 text-sm">Memuat…</div>}
         {error && !loading && <div className="p-10 text-center text-red-500 text-sm">{error}</div>}
         {!loading && !error && (data || []).length === 0 && <div className="p-10 text-center text-slate-400 text-sm">{emptyText || "Belum ada data"}</div>}

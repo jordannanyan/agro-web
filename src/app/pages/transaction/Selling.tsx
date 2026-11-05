@@ -10,6 +10,7 @@ import { useApi } from "../../lib/hooks";
 import { canWriteOperations } from "../../lib/permissions";
 import { useAuth } from "../../store/AuthContext";
 import { ShowUsedSources } from "../../components/ShowUsedSources";
+import { useClientPage } from "../../components/Pagination";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -198,6 +199,7 @@ export default function Selling() {
   const [search, setSearch] = useState("");
 
   const list = (rows || []).filter((r) => search === "" || (r.offtaker?.offtaker_name ?? "").toLowerCase().includes(search.toLowerCase()) || (r.processing?.processing_code ?? "").toLowerCase().includes(search.toLowerCase()));
+  const pg = useClientPage(list);
   const totalRevenue = list.reduce((s, r) => s + Number(r.total_revenue || 0), 0);
   const totalVol = list.reduce((s, r) => s + Number(r.accepted_volume || 0), 0);
 
@@ -231,7 +233,7 @@ export default function Selling() {
               ))}
             </tr></thead>
             <tbody>
-              {list.map((r) => (
+              {pg.pageRows.map((r) => (
                 <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{r.date}</td>
                   <td className="py-3 px-4 text-sm font-mono text-slate-700">{r.processing?.processing_code || "—"}</td>
@@ -247,7 +249,7 @@ export default function Selling() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{pg.pager}
         </div>
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
         {error && !loading && <div className="p-16 text-center text-red-500 text-sm">{error}</div>}

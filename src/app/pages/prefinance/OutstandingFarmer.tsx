@@ -3,6 +3,7 @@ import { Search, AlertTriangle, Users, DollarSign, TrendingDown } from "lucide-r
 import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { useApi } from "../../lib/hooks";
+import { useClientPage } from "../../components/Pagination";
 
 // Sumber data: view v_pre_finance_outstanding (agregat per petani).
 // Model cicilan ad-hoc (tanpa jadwal termin) → status = Lunas / Berjalan (bukan overdue).
@@ -44,6 +45,7 @@ export default function OutstandingFarmer() {
     return ms && mst;
   });
 
+  const pg = useClientPage(filtered);
   const totalOutstanding = rows.reduce((s, r) => s + Number(r.outstanding || 0), 0);
   const totalDistribusi  = rows.reduce((s, r) => s + Number(r.distributed_total || 0), 0);
   const totalTerbayar    = rows.reduce((s, r) => s + Number(r.paid_total || 0), 0);
@@ -107,7 +109,7 @@ export default function OutstandingFarmer() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => {
+              {pg.pageRows.map((r) => {
                 const dist = Number(r.distributed_total || 0);
                 const paid = Number(r.paid_total || 0);
                 const pct = dist > 0 ? Math.min((paid / dist) * 100, 100) : (paid > 0 ? 100 : 0);
@@ -144,7 +146,7 @@ export default function OutstandingFarmer() {
                 <td colSpan={2} />
               </tr>
             </tfoot>
-          </table>
+          </table>{pg.pager}
         </div>
 
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat data…</div>}

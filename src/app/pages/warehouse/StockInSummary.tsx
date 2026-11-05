@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, Package, Truck, CalendarDays, PackagePlus } 
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
 import { EntityTag, useEntityBound } from "../../components/EntityScope";
+import { useClientPage } from "../../components/Pagination";
 
 export type InGroup = "item" | "source" | "month";
 
@@ -30,6 +31,7 @@ export default function StockInSummary({ group, query }: { group: InGroup; query
   const bound = useEntityBound();
   const { data, loading, error } = useApi<Row[]>("stock-in/summary", { ...query, group }, [group, JSON.stringify(query)]);
   const rows: Row[] = data || [];
+  const pg = useClientPage(rows);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const toggle = (k: string) => setOpen((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const total = rows.reduce((s, r) => s + r.value, 0);
@@ -58,7 +60,7 @@ export default function StockInSummary({ group, query }: { group: InGroup; query
         </div>
       </div>
 
-      {rows.map((r) => {
+      {pg.pageRows.map((r) => {
         const k = String(r.id);
         const isOpen = open.has(k);
         const share = total > 0 ? (r.value / total) * 100 : 0;
@@ -134,6 +136,7 @@ export default function StockInSummary({ group, query }: { group: InGroup; query
           </Card>
         );
       })}
+      {pg.pager}
     </div>
   );
 }

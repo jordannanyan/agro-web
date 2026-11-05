@@ -11,6 +11,7 @@ import { ExportMenu } from "../../components/ExportMenu";
 import { exportVendorList, printAsPDF } from "../../utils/exportUtils";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
+import { useClientPage } from "../../components/Pagination";
 
 // ─── Types & mapping (API vendors → UI shape) ─────────────────────────────────
 
@@ -271,6 +272,7 @@ export default function VendorList() {
     return matchSearch && matchKategori && matchStatus;
   });
 
+  const pg = useClientPage(filtered);
   const aktifCount = vendors.filter((v) => v.status === "Aktif").length;
   const nonaktifCount = vendors.filter((v) => v.status === "Nonaktif").length;
 
@@ -353,7 +355,7 @@ export default function VendorList() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((vendor) => (
+              {pg.pageRows.map((vendor) => (
                 <tr key={vendor.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-3.5 px-5 text-sm font-mono font-semibold text-slate-700">{vendor.kodeVendor}</td>
                   <td className="py-3.5 px-5">
@@ -386,7 +388,7 @@ export default function VendorList() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{pg.pager}
         </div>
 
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat vendor…</div>}

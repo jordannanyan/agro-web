@@ -16,6 +16,7 @@ import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { useApi } from "../../lib/hooks";
 import { EntityScopeBar } from "../../components/EntityScope";
+import { useClientPage } from "../../components/Pagination";
 
 // API /warehouse-stock/reorder → ReorderItem shape.
 interface ApiReorder {
@@ -110,6 +111,7 @@ export default function ReorderMonitoring() {
     return matchSearch && matchWarehouse && matchStatus && matchCategory;
   });
 
+  const pg = useClientPage(filteredData);
   const totalItems = filteredData.length;
   const criticalCount = filteredData.filter((i) => i.status === "Critical").length;
   const lowCount = filteredData.filter((i) => i.status === "Low").length;
@@ -349,7 +351,7 @@ export default function ReorderMonitoring() {
               </tr>
             </thead>
             <tbody>
-              {filteredData.map((item) => (
+              {pg.pageRows.map((item) => (
                 <tr
                   key={item.id}
                   className={`border-b border-slate-50 hover:bg-slate-50/50 ${
@@ -397,7 +399,7 @@ export default function ReorderMonitoring() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{pg.pager}
         </div>
 
         {filteredData.length === 0 && (

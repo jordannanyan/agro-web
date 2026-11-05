@@ -13,6 +13,7 @@ import { useAuth } from "../store/AuthContext";
 import { isEntityBound, canDeleteDocument, canWriteOperations, type DocType } from "../lib/permissions";
 import { DocumentStatus, isMyTurn, isMyRevision, type PendingInfo } from "../components/DocumentStatus";
 import { EntityScopeBar, EntityTag } from "../components/EntityScope";
+import { useClientPage } from "../components/Pagination";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -89,6 +90,9 @@ export default function Procurement() {
     location.pathname.includes("/payment-request") ? "payment-request" : "purchase-request";
 
   const prList = prs || [], poList = pos || [], payList = pays || [];
+  const payPg = useClientPage(payList);
+  const poPg = useClientPage(poList);
+  const prPg = useClientPage(prList.filter((pr) => searchQuery === "" || pr.pr_number.toLowerCase().includes(searchQuery.toLowerCase())), searchQuery);
   // What the signed-in role is actually holding up, across all three document types.
   const myTurn = [...prList, ...poList, ...payList].filter((d) => isMyTurn(d, user?.role_code)).length;
   // Documents handed back to the viewer to fix. Counted apart from the approval
@@ -175,7 +179,7 @@ export default function Procurement() {
                   <th className={thR}>Total Amount</th><th className={thL}>Status</th><th className={thL}>Requester</th><th className={thR}>Actions</th>
                 </tr></thead>
                 <tbody>
-                  {prList.filter((pr) => searchQuery === "" || pr.pr_number.toLowerCase().includes(searchQuery.toLowerCase())).map((pr) => (
+                  {prPg.pageRows.map((pr) => (
                     <tr key={pr.id} className={`border-b border-slate-50 ${rowClass(pr, "PR", user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-blue-700">{pr.pr_number}</td>
                       {!bound && <td className="py-4 px-6"><EntityTag name={pr.entity_name} /></td>}
@@ -195,7 +199,7 @@ export default function Procurement() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table>{prPg.pager}
               {prList.length === 0 && <div className="p-16 text-center text-slate-400 text-sm">Belum ada Purchase Request</div>}
             </div>
           </Card>
@@ -213,7 +217,7 @@ export default function Procurement() {
                   <th className={thL}>PO Number</th>{!bound && <th className={thL}>Entitas</th>}<th className={thL}>Related PR</th><th className={thL}>Vendor</th><th className={thL}>Order Date</th><th className={thL}>Status</th><th className={thR}>Actions</th>
                 </tr></thead>
                 <tbody>
-                  {poList.map((po) => (
+                  {poPg.pageRows.map((po) => (
                     <tr key={po.id} className={`border-b border-slate-50 ${rowClass(po, "PO", user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-emerald-700">{po.po_number}</td>
                       {!bound && <td className="py-4 px-6"><EntityTag name={po.entity_name} /></td>}
@@ -227,7 +231,7 @@ export default function Procurement() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table>{poPg.pager}
               {poList.length === 0 && <div className="p-16 text-center text-slate-400 text-sm">Belum ada Purchase Order</div>}
             </div>
           </Card>
@@ -256,7 +260,7 @@ export default function Procurement() {
                   <th className={thR}>Amount</th><th className={thL}>Est. Bayar</th><th className={thL}>Status</th><th className={thR}>Actions</th>
                 </tr></thead>
                 <tbody>
-                  {payList.map((pay) => (
+                  {payPg.pageRows.map((pay) => (
                     <tr key={pay.id} className={`border-b border-slate-50 ${rowClass(pay, "PayReq", user?.role_code)}`}>
                       <td className="py-4 px-6 text-sm font-mono font-semibold text-amber-700">
                         {pay.payreq_number}
@@ -283,7 +287,7 @@ export default function Procurement() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table>{payPg.pager}
               {payList.length === 0 && <div className="p-16 text-center text-slate-400 text-sm">Belum ada Payment Request</div>}
             </div>
           </Card>

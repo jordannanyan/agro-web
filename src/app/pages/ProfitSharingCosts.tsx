@@ -14,6 +14,7 @@ import { useApi } from "../lib/hooks";
 import { EntityScopeBar, EntityTag, useEntityBound } from "../components/EntityScope";
 import Distribution from "./prefinance/Distribution";
 import { OperationalInvestmentPanel } from "./ProfitSharing";
+import { useClientPage } from "../components/Pagination";
 
 const fmtRp = (n: number) => (Number(n || 0) === 0 ? "–" : `Rp ${Number(n).toLocaleString("id-ID", { maximumFractionDigits: 0 })}`);
 
@@ -30,6 +31,7 @@ export default function ProfitSharingCosts({ initialTab = "summary" }: { initial
   const [entityFilter, setEntityFilter] = useState("");
   const { data, loading } = useApi<Row[]>("profit-sharing/costs/summary", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
   const rows = data || [];
+  const pg = useClientPage(rows);
   const sum = (k: keyof Row) => rows.reduce((s, r) => s + Number(r[k] || 0), 0);
   const th = "py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap";
   const td = "py-2.5 px-4 text-right font-mono text-sm whitespace-nowrap";
@@ -78,7 +80,7 @@ export default function ProfitSharingCosts({ initialTab = "summary" }: { initial
                 <th key={h} className={`${th} ${["Saprodi", "Tenaga Kerja", "Operasional", "Total Biaya"].includes(h) ? "text-right" : "text-left"}`}>{h}</th>)}
             </tr></thead>
             <tbody>
-              {rows.map((r) => (
+              {pg.pageRows.map((r) => (
                 <tr key={r.plot_id} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-2.5 px-4 text-sm font-semibold text-slate-900">{r.plot_name}</td>
                   <td className="py-2.5 px-4 text-sm text-slate-700">{r.farmer_name || "—"}</td>
@@ -101,7 +103,7 @@ export default function ProfitSharingCosts({ initialTab = "summary" }: { initial
                 <td className={`${td} font-bold`}>{fmtRp(sum("total"))}</td>
               </tr></tfoot>
             )}
-          </table>
+          </table>{pg.pager}
           {loading && <div className="p-10 text-center text-sm text-slate-400">Memuat…</div>}
         </Card>
       )}

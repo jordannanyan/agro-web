@@ -3,19 +3,21 @@ import { FileBarChart } from "lucide-react";
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
 import { StockOpnameCell, StockFormulaNote } from "../../components/StockOpnameCell";
+import { useClientPage } from "../../components/Pagination";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 function InventoryReport() {
   const { data, loading } = useApi<any[]>("warehouse-stock/inventory");
+  const pg = useClientPage(data);
   return (
     <Card className="p-0">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead><tr className="bg-slate-50 border-b border-slate-100">{["Gudang", "Saprodi", "Masuk", "Keluar", "Opname", "Sisa"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Opname", "Sisa"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
           <tbody>
-            {(data || []).map((r) => (
+            {pg.pageRows.map((r) => (
               <tr key={`${r.warehouse_id}-${r.sapropdi_id}`} className="border-b border-slate-50">
                 <td className="py-3 px-5 text-sm text-slate-600">{r.warehouse_name}</td>
                 <td className="py-3 px-5 text-sm font-semibold text-slate-900">{r.sapropdi_name}</td>
@@ -26,7 +28,7 @@ function InventoryReport() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>{pg.pager}
       </div>
       {(data || []).length > 0 && <StockFormulaNote />}
       {loading && <div className="p-12 text-center text-slate-400 text-sm">Memuat…</div>}
@@ -37,13 +39,14 @@ function InventoryReport() {
 
 function StockInReport() {
   const { data, loading } = useApi<any[]>("stock-in");
+  const pg = useClientPage(data);
   return (
     <Card className="p-0">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead><tr className="bg-slate-50 border-b border-slate-100">{["Nomor SI", "Tanggal", "Gudang", "PO", "Status"].map((h) => <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}</tr></thead>
           <tbody>
-            {(data || []).map((r) => (
+            {pg.pageRows.map((r) => (
               <tr key={r.id} className="border-b border-slate-50">
                 <td className="py-3 px-5 text-sm font-mono font-semibold text-emerald-700">{r.stock_in_number}</td>
                 <td className="py-3 px-5 text-sm text-slate-600">{r.stock_in_date}</td>
@@ -53,7 +56,7 @@ function StockInReport() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>{pg.pager}
       </div>
       {loading && <div className="p-12 text-center text-slate-400 text-sm">Memuat…</div>}
       {!loading && (data || []).length === 0 && <div className="p-12 text-center text-slate-400 text-sm">Belum ada Stock In</div>}
@@ -64,13 +67,14 @@ function StockInReport() {
 function DistributionReport() {
   const { data, loading } = useApi<any[]>("pre-finance/distributions");
   const saprodiOnly = (data || []).filter((r) => r.sapropdi_name);
+  const pg = useClientPage(saprodiOnly);
   return (
     <Card className="p-0">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead><tr className="bg-slate-50 border-b border-slate-100">{["Tanggal", "Petani", "Saprodi", "Qty", "Nilai", "Kirim"].map((h) => <th key={h} className={`${["Qty", "Nilai"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
           <tbody>
-            {saprodiOnly.map((r) => (
+            {pg.pageRows.map((r) => (
               <tr key={r.id} className="border-b border-slate-50">
                 <td className="py-3 px-5 text-sm text-slate-600">{r.date}</td>
                 <td className="py-3 px-5 text-sm font-semibold text-slate-900">{r.farmer_name}</td>
@@ -81,7 +85,7 @@ function DistributionReport() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>{pg.pager}
       </div>
       {loading && <div className="p-12 text-center text-slate-400 text-sm">Memuat…</div>}
       {!loading && saprodiOnly.length === 0 && <div className="p-12 text-center text-slate-400 text-sm">Belum ada distribusi saprodi</div>}

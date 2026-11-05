@@ -23,6 +23,7 @@ import { Button } from "../../components/ui/button";
 import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { refreshInbox } from "../../lib/inbox";
+import { useClientPage } from "../../components/Pagination";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -402,11 +403,14 @@ export default function PaymentReconciliation() {
 
   const { data: outstanding, refetch: refetchOutstanding } =
     useApi<Outstanding[]>("bank-statements/outstanding");
+  const outPg = useClientPage(outstanding);
   const { data: history, refetch: refetchHistory } = useApi<ImportRow[]>("bank-statements");
+  const histPg = useClientPage(history);
   // The leftovers of every past import, in one list. What finance has to clear is
   // the lines nothing accounted for, and which file produced them is a detail.
   const { data: unmatched, refetch: refetchUnmatched } =
     useApi<UnmatchedLine[]>("bank-statements/lines/unmatched");
+  const unPg = useClientPage(unmatched);
   const [matchLine, setMatchLine] = useState<number | null>(null);
   const [matchPayreq, setMatchPayreq] = useState("");
   const [matchNote, setMatchNote] = useState("");
@@ -952,7 +956,7 @@ export default function PaymentReconciliation() {
                 </tr>
               </thead>
               <tbody>
-                {(unmatched || []).map((l) => {
+                {unPg.pageRows.map((l) => {
                   const open = matchLine === l.id;
                   const picked = (outstanding || []).find((o) => String(o.id) === matchPayreq);
                   const diff = picked ? Number(l.amount_out) - Number(picked.amount) : 0;
@@ -1031,7 +1035,7 @@ export default function PaymentReconciliation() {
                   );
                 })}
               </tbody>
-            </table>
+            </table>{unPg.pager}
           </div>
           {!(unmatched || []).length && (
             <div className="p-16 text-center">
@@ -1067,7 +1071,7 @@ export default function PaymentReconciliation() {
                 </tr>
               </thead>
               <tbody>
-                {(outstanding || []).map((o) => (
+                {outPg.pageRows.map((o) => (
                   <tr key={o.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                     <td className="py-3 px-4 text-sm">
                       <button
@@ -1110,7 +1114,7 @@ export default function PaymentReconciliation() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>{outPg.pager}
           </div>
           {!(outstanding || []).length && (
             <div className="p-12 text-center text-slate-400 text-sm">Tidak ada pembayaran yang menggantung</div>
@@ -1135,7 +1139,7 @@ export default function PaymentReconciliation() {
                 </tr>
               </thead>
               <tbody>
-                {(history || []).map((h) => (
+                {histPg.pageRows.map((h) => (
                   <tr key={h.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                     <td className="py-3 px-4 text-sm text-slate-700">{h.file_name}</td>
                     <td className="py-3 px-4 text-sm text-slate-500 font-mono">{h.period_start || "?"} → {h.period_end || "?"}</td>
@@ -1146,7 +1150,7 @@ export default function PaymentReconciliation() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>{histPg.pager}
           </div>
           {!(history || []).length && (
             <div className="p-12 text-center text-slate-400 text-sm">Belum ada file yang diunggah</div>

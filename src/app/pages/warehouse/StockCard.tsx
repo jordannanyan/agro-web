@@ -4,6 +4,7 @@ import { ArrowLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, ClipboardChec
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
 import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
+import { useClientPage } from "../../components/Pagination";
 
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
@@ -32,6 +33,7 @@ export default function StockCard() {
     sapropdiId ? { sapropdi_id: sapropdiId, warehouse_id: warehouseId || undefined, entity_id: entityFilter || undefined } : undefined,
     [sapropdiId, warehouseId, entityFilter]
   );
+  const pg = useClientPage(card);
   // With no warehouse chosen the card mixes movements from every warehouse the
   // viewer may see, so it has to say which one each line came from.
   const showOrigin = !bound && !warehouseId;
@@ -69,7 +71,7 @@ export default function StockCard() {
               {["Tanggal", ...(showOrigin ? ["Entitas", "Gudang"] : []), "Tipe", "Referensi", "Masuk", "Keluar", "Saldo"].map((h) => <th key={h} className={`${["Masuk", "Keluar", "Saldo"].includes(h) ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}
             </tr></thead>
             <tbody>
-              {(card || []).map((r, i) => (
+              {pg.pageRows.map((r, i) => (
                 <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-3 px-5 text-sm text-slate-600 whitespace-nowrap">{r.date}</td>
                   {showOrigin && <td className="py-3 px-5"><EntityTag name={r.entity_name} /></td>}
@@ -97,7 +99,7 @@ export default function StockCard() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{pg.pager}
         </div>
         {!sapropdiId && <div className="p-16 text-center text-slate-400 text-sm">Pilih saprodi untuk melihat kartu stok</div>}
         {sapropdiId && loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}

@@ -10,6 +10,7 @@ import { useApi } from "../lib/hooks";
 import { useAuth } from "../store/AuthContext";
 import { canWriteProfitSharing } from "../lib/permissions";
 import ProfitSharePayout from "./ProfitSharePayout";
+import { useClientPage } from "../components/Pagination";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits: 0 });
@@ -35,6 +36,7 @@ const th = (right: boolean) =>
 // -----------------------------------------------------------------------------
 function RevenueTab() {
   const { data, loading } = useApi<any[]>("profit-sharing/revenue");
+  const pg = useClientPage(data);
   const total = (data || []).reduce((s, r) => s + Number(r.total_revenue || 0), 0);
   return (
     <Card className="p-0">
@@ -55,7 +57,7 @@ function RevenueTab() {
               <th key={h} className={th(["Kg Setor", "Porsi", "Harga/Kg", "Nilai Jual", "Bagian Lahan"].includes(h))}>{h}</th>)}
           </tr></thead>
           <tbody>
-            {(data || []).map((r, i) => (
+            {pg.pageRows.map((r, i) => (
               <tr key={`${r.id}-${r.plot_id}-${i}`} className="border-b border-slate-50 hover:bg-slate-50/50">
                 <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{String(r.date).slice(0, 10)}</td>
                 <td className="py-3 px-4 text-sm font-mono text-slate-500">{r.period}</td>
@@ -71,7 +73,7 @@ function RevenueTab() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>{pg.pager}
       </div>
       {loading && <div className="p-12 text-center text-slate-400 text-sm">Memuat…</div>}
       {!loading && (data || []).length === 0 && <div className="p-12 text-center text-slate-400 text-sm">Belum ada revenue Profit Sharing</div>}
@@ -89,6 +91,7 @@ function RevenueTab() {
 function PLTab() {
   const { data, loading } = useApi<any[]>("profit-sharing/pl");
   const rows = data || [];
+  const pg = useClientPage(rows);
   const sum = (k: string) => rows.reduce((s, r) => s + Number(r[k] || 0), 0);
   const negatives = rows.filter((r) => Number(r.net_profit || 0) < 0).length;
 
@@ -125,7 +128,7 @@ function PLTab() {
                 <th key={h} className={th(h !== "Plot" && h !== "Petani")}>{h}</th>)}
             </tr></thead>
             <tbody>
-              {rows.map((r) => {
+              {pg.pageRows.map((r) => {
                 const np = Number(r.net_profit || 0);
                 return (
                   <tr key={r.plot_id} className="border-b border-slate-50 hover:bg-slate-50/50">
@@ -156,7 +159,7 @@ function PLTab() {
                 <td className="py-3 px-4 text-right text-sm font-mono font-bold text-slate-800">{fmtRp(sum("settled_farmer"))}</td>
               </tr></tfoot>
             )}
-          </table>
+          </table>{pg.pager}
         </div>
         {loading && <div className="p-12 text-center text-slate-400 text-sm">Memuat…</div>}
         {!loading && rows.length === 0 && <div className="p-12 text-center text-slate-400 text-sm">Belum ada lahan Profit Sharing</div>}
@@ -180,6 +183,7 @@ function ShareTab() {
   const mayWrite = canWriteProfitSharing(user?.role_code);
   const { data: sellings } = useApi<any[]>("selling");
   const { data: shares, refetch } = useApi<any[]>("profit-sharing/shares");
+  const sharePg = useClientPage(shares);
   const [sellingId, setSellingId] = useState("");
   const [preview, setPreview] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
@@ -352,7 +356,7 @@ function ShareTab() {
                 <th key={h} className={th(["Bagian Jual", "Total Biaya", "Laba", "% Petani", "Petani", "KTH", "Perusahaan", "Saldo Petani"].includes(h))}>{h}</th>)}
             </tr></thead>
             <tbody>
-              {(shares || []).map((r) => (
+              {sharePg.pageRows.map((r) => (
                 <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-3 px-4 text-sm font-mono text-slate-500">{r.period}</td>
                   <td className="py-3 px-4 text-sm font-mono text-slate-500">{r.selling_id ? `#${r.selling_id}` : "—"}</td>
@@ -369,7 +373,7 @@ function ShareTab() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{sharePg.pager}
         </div>
         {(shares || []).length === 0 && <div className="p-12 text-center text-slate-400 text-sm">Belum ada perhitungan bagi hasil</div>}
       </Card>

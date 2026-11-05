@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight, Sprout, User, MapPin, Package } from "lucide
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
 import { EntityTag, useEntityBound } from "../../components/EntityScope";
+import { useClientPage } from "../../components/Pagination";
 
 export type Group = "farmer" | "plot" | "commodity";
 
@@ -48,6 +49,7 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
   const bound = useEntityBound();
   const { data, loading, error } = useApi<Row[]>("stock-out/summary", { ...query, group }, [group, JSON.stringify(query)]);
   const rows: Row[] = data || [];
+  const pg = useClientPage(rows);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const toggle = (k: string) => setOpen((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const total = rows.reduce((s, r) => s + r.amount, 0);
@@ -74,7 +76,7 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
         </div>
       </div>
 
-      {rows.map((r) => {
+      {pg.pageRows.map((r) => {
         const k = String(r.id);
         const isOpen = open.has(k);
         const share = total > 0 ? (r.amount / total) * 100 : 0;
@@ -178,6 +180,7 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
           </Card>
         );
       })}
+      {pg.pager}
     </div>
   );
 }

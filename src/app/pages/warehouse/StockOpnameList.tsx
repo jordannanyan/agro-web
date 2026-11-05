@@ -14,6 +14,7 @@ import { Button } from "../../components/ui/button";
 import { useApi } from "../../lib/hooks";
 import { useAuth } from "../../store/AuthContext";
 import { canWriteOperations, isEntityBound } from "../../lib/permissions";
+import { useClientPage } from "../../components/Pagination";
 
 const num = (n: number) =>
   Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits: 3 });
@@ -57,6 +58,7 @@ export default function StockOpnameList() {
   const mayWrite = canWriteOperations(user);
   const rows = useMemo(() => data || [], [data]);
 
+  const pg = useClientPage(rows);
   const selectCls =
     "border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white";
   const th = "text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap";
@@ -136,7 +138,7 @@ export default function StockOpnameList() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pg.pageRows.map((r) => {
                   const diff = Number(r.variance_lines || 0);
                   const total = Number(r.variance_total || 0);
                   return (
@@ -185,7 +187,7 @@ export default function StockOpnameList() {
                   );
                 })}
               </tbody>
-            </table>
+            </table>{pg.pager}
           </div>
         )}
       </Card>

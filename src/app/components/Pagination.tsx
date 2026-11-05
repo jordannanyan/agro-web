@@ -115,3 +115,25 @@ export function Pagination({
     </div>
   );
 }
+
+/**
+ * Pagination for a list that is already in the browser — summaries, reports and
+ * the smaller masters, whose endpoints return the whole set (often because the
+ * rows are computed, not stored). Totals and filters still work on the full list;
+ * only what is rendered is sliced. Back to page 1 when the list or `resetKey`
+ * changes, for the same reason as usePagedApi.
+ */
+export function useClientPage<T>(rows: T[] | null | undefined, resetKey?: any) {
+  const list = rows ?? [];
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
+  const key = JSON.stringify(resetKey ?? null);
+  useEffect(() => { setPage(1); }, [perPage, list.length, key]);
+  const total = list.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const current = Math.min(page, totalPages);
+  const pageRows = list.slice((current - 1) * perPage, current * perPage);
+  const meta: PageMeta = { page: current, per_page: perPage, total, total_pages: totalPages };
+  const pager = <Pagination meta={meta} page={current} onPage={setPage} perPage={perPage} onPerPage={setPerPage} />;
+  return { pageRows, meta, page: current, setPage, perPage, setPerPage, pager };
+}

@@ -14,6 +14,7 @@ import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { api } from "../lib/api";
 import { useApi } from "../lib/hooks";
+import { useClientPage } from "../components/Pagination";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
 const selectCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500";
@@ -30,6 +31,7 @@ interface Preview {
 export default function ProfitSharePayout({ mayWrite }: { mayWrite: boolean }) {
   const { data: plots } = useApi<any[]>("profit-sharing/pl");
   const { data: payouts, refetch } = useApi<any[]>("profit-sharing/payouts");
+  const pg = useClientPage(payouts);
   const [plotId, setPlotId] = useState("");
   // Local date, not UTC: in WIB the UTC date is still yesterday until 07:00.
   const [date, setDate] = useState(new Date().toLocaleDateString("sv-SE"));
@@ -136,7 +138,7 @@ export default function ProfitSharePayout({ mayWrite }: { mayWrite: boolean }) {
                 <th key={h} className={`py-2.5 px-3 font-semibold ${["Posisi", "Bagian Petani", "Potong Utang PF", "Diterima"].includes(h) ? "text-right" : "text-left"}`}>{h}</th>)}
             </tr></thead>
             <tbody>
-              {(payouts || []).map((p) => (
+              {pg.pageRows.map((p) => (
                 <tr key={p.id} className="border-b border-slate-50">
                   <td className="py-2 px-3 font-mono text-slate-600">{String(p.payout_date).slice(0, 10)}</td>
                   <td className="py-2 px-3 font-semibold text-slate-900">{p.plot_name}</td>
@@ -150,7 +152,7 @@ export default function ProfitSharePayout({ mayWrite }: { mayWrite: boolean }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{pg.pager}
         </div>
       )}
     </Card>

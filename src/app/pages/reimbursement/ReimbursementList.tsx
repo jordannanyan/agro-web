@@ -30,6 +30,7 @@ import { Input } from "../../components/ui/input";
 import { useApi } from "../../lib/hooks";
 import { useAuth } from "../../store/AuthContext";
 import { canWriteOperations, canEditDocument, isEntityBound } from "../../lib/permissions";
+import { useClientPage } from "../../components/Pagination";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -135,6 +136,7 @@ export default function ReimbursementList() {
     return list;
   }, [data, tab, kindTab, search]);
 
+  const pg = useClientPage(rows);
   // The headline figures follow the kind filter: with "Petani" selected, "siap
   // dibayar" has to mean the farmer ones, or the number contradicts the list below it.
   const all = useMemo(
@@ -283,7 +285,7 @@ export default function ReimbursementList() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => {
+                  {pg.pageRows.map((r) => {
                     // The row is tinted when it is this person's turn — the same cue
                     // the procurement lists use, so one habit works everywhere.
                     const mine = r.pending_role_code && r.pending_role_code === user?.role_code;
@@ -342,7 +344,7 @@ export default function ReimbursementList() {
                     );
                   })}
                 </tbody>
-              </table>
+              </table>{pg.pager}
             </div>
           )}
         </Card>

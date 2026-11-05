@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { useApi } from "../../lib/hooks";
 import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/EntityScope";
-import { usePagedApi, Pagination } from "../../components/Pagination";
+import { usePagedApi, Pagination, useClientPage } from "../../components/Pagination";
 import { canWriteOperations } from "../../lib/permissions";
 import type { OpnameInfo } from "../../components/StockOpnameCell";
 import { useAuth } from "../../store/AuthContext";
@@ -67,6 +67,7 @@ export default function StockManagement() {
   const openDiff = searched.filter((r) => diffState(r)?.open);
   const uncounted = searched.filter((r) => r.last_opname_id == null);
   const invList = filter === "diff" ? openDiff : filter === "uncounted" ? uncounted : searched;
+  const invPg = useClientPage(invList, [filter, search, warehouseId]);
 
 
   return (
@@ -146,7 +147,7 @@ export default function StockManagement() {
                 ))}
               </tr></thead>
               <tbody>
-                {invList.map((r) => {
+                {invPg.pageRows.map((r) => {
                   const unit = r.unit_name || "";
                   const st = diffState(r);
                   const adj = Number(r.total_adjustment || 0);
@@ -198,6 +199,7 @@ export default function StockManagement() {
                 })}
               </tbody>
             </table>
+            {invPg.pager}
             {invList.length > 0 && (
               <p className="px-5 py-3 text-xs text-slate-500 border-t border-slate-100 flex items-start gap-1.5">
                 <CircleHelp className="w-3.5 h-3.5 mt-0.5 shrink-0" />

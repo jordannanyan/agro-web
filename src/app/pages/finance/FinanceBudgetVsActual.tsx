@@ -10,6 +10,7 @@ import { useApi } from "../../lib/hooks";
 import { ExportMenu } from "../../components/ExportMenu";
 import { rp } from "./frShared";
 import { exportCsv, FinanceFilters, useFinanceFilters } from "./financeFilters";
+import { useClientPage } from "../../components/Pagination";
 
 interface Row {
   budget_code_id: number | null; budget_code: string; main_account: string; sub_account: string;
@@ -80,6 +81,7 @@ export default function FinanceBudgetVsActual() {
   const f = useFinanceFilters();
   const { data, loading } = useApi<Row[]>("finance/budget-vs-actual", f.query, [f.key]);
   const rows = data || [];
+  const pg = useClientPage(rows);
   const tb = rows.reduce((s, r) => s + r.budget, 0);
   const ta = rows.reduce((s, r) => s + r.actual, 0);
   const groups = useMemo(() => {
@@ -123,7 +125,7 @@ export default function FinanceBudgetVsActual() {
               <th className={`${th} text-left w-48`}>Utilisasi</th><th className={`${th} text-left`}>Status</th>
             </tr></thead>
             <tbody>
-              {rows.map((r) => (
+              {pg.pageRows.map((r) => (
                 <tr key={String(r.budget_code_id)} className="border-b border-slate-50 hover:bg-slate-50/50 cursor-pointer"
                   onClick={() => r.budget_code_id && navigate(`/financial/budget?budget_code_id=${r.budget_code_id}`)}>
                   <td className="px-3 py-2.5 text-xs text-slate-500">{r.main_account}</td>
@@ -141,7 +143,7 @@ export default function FinanceBudgetVsActual() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{pg.pager}
         </div>
         {!loading && rows.length === 0 && <div className="p-16 text-center"><BarChart3 className="w-12 h-12 text-slate-300 mx-auto mb-4" /><p className="text-slate-500 font-medium">Belum ada budget atau realisasi</p></div>}
       </Card>

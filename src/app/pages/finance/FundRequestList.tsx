@@ -12,6 +12,7 @@ import { useAuth } from "../../store/AuthContext";
 import { ROLE } from "../../lib/permissions";
 import { EntityTag } from "../../components/EntityScope";
 import { StageBadge, Stage, periodLabel, rp, fmtDate } from "./frShared";
+import { useClientPage } from "../../components/Pagination";
 
 interface Row {
   id: number; fr_number: string; entity_id: number; entity_name: string; period: string; stage: Stage;
@@ -94,6 +95,7 @@ export default function FundRequestList() {
   const opEntities = (entities || []).filter((e) => !e.entity_type || String(e.entity_type).toLowerCase() === "operational");
   const mayCreate = [ROLE.FINANCE_MANAGER, ROLE.FINANCE_STAFF, ROLE.PROJECT_MANAGER, ROLE.SUPER_ADMIN].includes(user?.role_code as any);
   const rows = data || [];
+  const pg = useClientPage(rows);
   const sumBy = (s: Stage) => rows.filter((r) => r.stage === s).length;
 
   const selectCls = "px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white";
@@ -145,7 +147,7 @@ export default function FundRequestList() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {pg.pageRows.map((r) => (
                 <tr key={r.id} onClick={() => navigate(`/financial/fund-request/${r.id}`)} className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer">
                   <td className="py-3.5 px-4 text-sm font-mono font-semibold text-emerald-700">{r.fr_number}</td>
                   <td className="py-3.5 px-4"><EntityTag name={r.entity_name} /></td>
@@ -166,7 +168,7 @@ export default function FundRequestList() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{pg.pager}
         </div>
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
         {error && !loading && <div className="p-16 text-center text-red-500 text-sm">{error}</div>}

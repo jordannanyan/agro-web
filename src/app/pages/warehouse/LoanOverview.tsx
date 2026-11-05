@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import { Card } from "../../components/ui/card";
 import { useApi } from "../../lib/hooks";
 import { EntityTag, useEntityBound } from "../../components/EntityScope";
+import { useClientPage } from "../../components/Pagination";
 
 interface Row {
   farmer_id: number; farmer_name: string; entity_name: string | null;
@@ -66,6 +67,7 @@ export default function LoanOverview({ query }: { query: Record<string, string |
   const rows = all
     .filter((r) => !com || r.commodity_name === com || (r.plot_id == null && r.commodity_name == null))
     .filter((r) => !sch || (sch === "ps" ? r.row_scheme === "ProfitSharing" : r.row_scheme !== "ProfitSharing"));
+  const pg = useClientPage(rows, [com, sch]);
   const sum = (k: keyof Row) => rows.reduce((s, r) => s + Number(r[k] || 0), 0);
 
   if (loading) return <Card className="p-10 text-center text-sm text-slate-400">Memuat…</Card>;
@@ -119,7 +121,7 @@ export default function LoanOverview({ query }: { query: Record<string, string |
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {pg.pageRows.map((r) => (
               <tr key={`${r.farmer_id}-${r.plot_id}-${r.commodities_id}-${r.row_scheme}`} className="border-b border-slate-50 hover:bg-slate-50/50">
                 <td className="py-2 px-3 text-sm font-semibold text-slate-900 whitespace-nowrap">
                   {r.farmer_name}{!bound && r.entity_name && <span className="ml-1.5"><EntityTag name={r.entity_name} /></span>}
@@ -158,7 +160,7 @@ export default function LoanOverview({ query }: { query: Record<string, string |
               </tr>
             </tfoot>
           )}
-        </table>
+        </table>{pg.pager}
       </Card>
     </div>
   );

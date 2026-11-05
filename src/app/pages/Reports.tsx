@@ -3,6 +3,7 @@ import { FileText, ShoppingCart, CreditCard, Sprout } from "lucide-react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { useApi } from "../lib/hooks";
+import { useClientPage } from "../components/Pagination";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -18,6 +19,7 @@ function ProcurementReport() {
   const { data: prs } = useApi<any[]>("purchase-requests");
   const { data: pos } = useApi<any[]>("purchase-orders");
   const prList = prs || [], poList = pos || [];
+  const pg = useClientPage(prList);
   const prTotal = prList.reduce((s, r) => s + Number(r.grand_total || 0), 0);
   return (
     <div className="space-y-4">
@@ -30,10 +32,10 @@ function ProcurementReport() {
         <div className="p-5 border-b border-slate-100"><h3 className="text-slate-800 font-semibold">Purchase Requests</h3></div>
         <div className="overflow-x-auto"><table className="w-full">
           <thead><tr className="bg-slate-50 border-b border-slate-100">{["Nomor", "Entitas", "Tanggal", "Total", "Status"].map((h) => <th key={h} className={`${h === "Total" ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
-          <tbody>{prList.slice(0, 20).map((r) => (
+          <tbody>{pg.pageRows.map((r) => (
             <tr key={r.id} className="border-b border-slate-50"><td className="py-3 px-5 text-sm font-mono text-blue-700">{r.pr_number}</td><td className="py-3 px-5 text-sm text-slate-600">{r.entity_name}</td><td className="py-3 px-5 text-sm text-slate-600">{r.request_date}</td><td className="py-3 px-5 text-right text-sm font-mono text-slate-900">{fmtRp(r.grand_total)}</td><td className="py-3 px-5"><Badge className={`border ${statusBadge(r.status)}`}>{r.status}</Badge></td></tr>
           ))}</tbody>
-        </table></div>
+        </table>{pg.pager}</div>
         {prList.length === 0 && <div className="p-10 text-center text-slate-400 text-sm">Belum ada data</div>}
       </Card>
     </div>
@@ -43,6 +45,7 @@ function ProcurementReport() {
 function PaymentReport() {
   const { data } = useApi<any[]>("payment-requests");
   const list = data || [];
+  const pg = useClientPage(list);
   const total = list.reduce((s, r) => s + Number(r.amount || 0), 0);
   return (
     <div className="space-y-4">
@@ -53,10 +56,10 @@ function PaymentReport() {
       <Card className="p-0">
         <div className="overflow-x-auto"><table className="w-full">
           <thead><tr className="bg-slate-50 border-b border-slate-100">{["Nomor", "Sumber", "Nominal", "Est. Bayar", "Status"].map((h) => <th key={h} className={`${h === "Nominal" ? "text-right" : "text-left"} py-3 px-5 text-xs font-semibold text-slate-600 uppercase tracking-wide`}>{h}</th>)}</tr></thead>
-          <tbody>{list.slice(0, 20).map((r) => (
+          <tbody>{pg.pageRows.map((r) => (
             <tr key={r.id} className="border-b border-slate-50"><td className="py-3 px-5 text-sm font-mono text-amber-700">{r.payreq_number}</td><td className="py-3 px-5 text-sm text-slate-600">{r.po_number || r.pr_number || "—"}</td><td className="py-3 px-5 text-right text-sm font-mono text-slate-900">{fmtRp(r.amount)}</td><td className="py-3 px-5 text-sm text-slate-600">{r.estimated_pay_date || "—"}</td><td className="py-3 px-5"><Badge className={`border ${statusBadge(r.status)}`}>{r.status}</Badge></td></tr>
           ))}</tbody>
-        </table></div>
+        </table>{pg.pager}</div>
         {list.length === 0 && <div className="p-10 text-center text-slate-400 text-sm">Belum ada data</div>}
       </Card>
     </div>

@@ -9,6 +9,7 @@ import { api } from "../../lib/api";
 import { useApi } from "../../lib/hooks";
 import { canWriteOperations } from "../../lib/permissions";
 import { useAuth } from "../../store/AuthContext";
+import { useClientPage } from "../../components/Pagination";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -180,6 +181,7 @@ export default function Processing() {
 
   const list = (rows || []).filter((r) => search === "" || r.processing_code?.toLowerCase().includes(search.toLowerCase()));
 
+  const pg = useClientPage(list);
   async function remove(id: number) {
     if (!confirm("Hapus batch ini?")) return;
     try { await api.del(`processing/${id}`); toast.success("Dihapus"); refetch(); } catch (e: any) { toast.error(e?.message || "Gagal"); }
@@ -206,7 +208,7 @@ export default function Processing() {
               ))}
             </tr></thead>
             <tbody>
-              {list.map((r) => (
+              {pg.pageRows.map((r) => (
                 <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-3 px-4 text-sm font-mono font-semibold text-slate-700">{r.processing_code}</td>
                   <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{r.date}</td>
@@ -222,7 +224,7 @@ export default function Processing() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{pg.pager}
         </div>
         {loading && <div className="p-16 text-center text-slate-400 text-sm">Memuat…</div>}
         {error && !loading && <div className="p-16 text-center text-red-500 text-sm">{error}</div>}
