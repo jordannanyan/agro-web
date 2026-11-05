@@ -16,9 +16,10 @@ const num = (n: number) => Number(n || 0).toLocaleString("id-ID", { maximumFract
 const pct = (n: number) => `${Number(n || 0).toFixed(2)}%`;
 const opt = (rows: any[] | null, v: string, l: string) => (rows || []).map((r) => ({ value: r[v], label: r[l] }));
 
-type TabId = "investment" | "revenue" | "pl" | "ps";
+// Operational Investment moved to Profit Sharing → Biaya Lahan Bagi Hasil
+// (ProfitSharingCosts.tsx), beside the saprodi and labour lines.
+type TabId = "revenue" | "pl" | "ps";
 const PATH_TO_TAB: Record<string, TabId> = {
-  "/profit-sharing": "investment", "/profit-sharing/investment": "investment",
   "/profit-sharing/revenue": "revenue", "/profit-sharing/pl": "pl", "/profit-sharing/ps": "ps",
 };
 
@@ -376,15 +377,15 @@ function ShareTab() {
   );
 }
 
-export default function ProfitSharing() {
-  const location = useLocation();
+/**
+ * Operational costs of a profit-sharing plot that are not goods (ojek, transport,
+ * rent; SNBS: the ledger's material column). Shown under Profit Sharing → Biaya
+ * Lahan Bagi Hasil, beside the saprodi and labour lines.
+ */
+export function OperationalInvestmentPanel() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  // Field Admin, Project Manager dan Procurement membaca halaman ini; yang mengubah
-  // angkanya tetap Finance Manager dan Direktur. Aturannya sama di API.
   const mayWrite = canWriteProfitSharing(user?.role_code);
-  const activeTab: TabId = PATH_TO_TAB[location.pathname] ?? "investment";
-
   const { data: farmers } = useApi<any[]>("farmers");
   const { data: plots } = useApi<any[]>("plots", { scheme: "ProfitSharing" });
   const { data: types } = useApi<any[]>("pre-finance-types");
@@ -403,14 +404,7 @@ export default function ProfitSharing() {
   ];
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
-        <div><h1 className="text-2xl text-slate-900">Profit Sharing</h1><p className="text-sm text-slate-500">Investasi operasional → penjualan → bagi hasil petani &amp; perusahaan</p></div>
-      </div>
-
-      {activeTab === "investment" && (
-        <>
+    <div className="space-y-4">
           {/* Saprodi is stock, and stock leaves through the warehouse. Recording it
               here as a bare amount is what used to let goods reach a farmer without
               ever being deducted from a warehouse. */}
@@ -432,8 +426,26 @@ export default function ProfitSharing() {
             </div>
           </Card>
           <Card className="p-6"><MasterCrud endpoint="profit-sharing/investments" title="Investasi Operasional (non-barang)" fields={investmentFields} readOnly={!mayWrite} emptyText="Belum ada investasi" /></Card>
-        </>
-      )}
+            </div>
+  );
+}
+
+export default function ProfitSharing() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  // Field Admin, Project Manager dan Procurement membaca halaman ini; yang mengubah
+  // angkanya tetap Finance Manager dan Direktur. Aturannya sama di API.
+  const mayWrite = canWriteProfitSharing(user?.role_code);
+  const activeTab: TabId = PATH_TO_TAB[location.pathname] ?? "pl";
+
+  return (
+    <div className="space-y-6 pb-8">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
+        <div><h1 className="text-2xl text-slate-900">Profit Sharing</h1><p className="text-sm text-slate-500">Investasi operasional → penjualan → bagi hasil petani &amp; perusahaan</p></div>
+      </div>
+
       {activeTab === "revenue" && <RevenueTab />}
       {activeTab === "pl" && <PLTab />}
       {activeTab === "ps" && <ShareTab />}

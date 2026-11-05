@@ -42,6 +42,7 @@ import Installment from "./pages/prefinance/Installment";
 import InstallmentCreate from "./pages/prefinance/InstallmentCreate";
 import OutstandingFarmer from "./pages/prefinance/OutstandingFarmer";
 import Distribution from "./pages/prefinance/Distribution";
+import ProfitSharingCosts from "./pages/ProfitSharingCosts";
 import PaybackRates from "./pages/prefinance/PaybackRates";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
@@ -52,7 +53,7 @@ const ClaimsRedirect = () => <Navigate to="/reimbursement" replace />;
 // Riwayat Barang Keluar moved from Gudang to Pre-Finance as "Rincian Utang Saprodi"
 // (2026-11-04): old links and bookmarks still land on it.
 const DebtLinesRedirect = () => <Navigate to="/prefinance/distribution" replace />;
-const ProfitSharingCosts = () => <Distribution kind="ps" />;
+const ProfitSharingOps = () => <ProfitSharingCosts initialTab="ops" />;
 
 export const router = createBrowserRouter([
   { path: "/login", Component: Login },
@@ -153,8 +154,8 @@ export const router = createBrowserRouter([
       { path: "financial/monitoring",          Component: FinanceBudgetVsActual },
 
       // ── Profit Sharing sub-pages ──────────────────────────────────────────
-      { path: "profit-sharing",                Component: ProfitSharingPage },
-      { path: "profit-sharing/investment",     Component: ProfitSharingPage },
+      { path: "profit-sharing",                Component: ProfitSharingCosts },
+      { path: "profit-sharing/investment",     Component: ProfitSharingOps },
       { path: "profit-sharing/costs",          Component: ProfitSharingCosts },
       { path: "profit-sharing/revenue",        Component: ProfitSharingPage },
       { path: "profit-sharing/pl",             Component: ProfitSharingPage },

@@ -46,7 +46,7 @@ function typeBadge(type: string) {
 type Kind = "debt" | "ps";
 const TYPE_LABEL: Record<string, string> = { Labor: "Tenaga Kerja" };
 
-export default function Distribution({ kind = "debt" }: { kind?: Kind }) {
+export default function Distribution({ kind = "debt", embedded = false }: { kind?: Kind; embedded?: boolean }) {
   const isPS = kind === "ps";
   const navigate = useNavigate();
   // Rows are entity-scoped by the API; accounts that span several PTs get the
@@ -81,8 +81,8 @@ export default function Distribution({ kind = "debt" }: { kind?: Kind }) {
   }
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex items-start justify-between">
+    <div className={embedded ? "space-y-4" : "space-y-6 pb-8"}>
+      {!embedded && <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl text-slate-900 mb-1">{isPS ? "Biaya Saprodi & Tenaga Kerja" : "Rincian Utang Saprodi"}</h1>
           {isPS ? (
@@ -103,7 +103,7 @@ export default function Distribution({ kind = "debt" }: { kind?: Kind }) {
         </div>
         {/* Issuing goods is a warehouse act now — this page is the line-level record of it. */}
         {mayWrite && <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate("/warehouse/stock-out/create")}><Plus className="w-4 h-4 mr-2" />Buat Stock Out</Button>}
-      </div>
+      </div>}
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Jumlah Baris</p><p className="text-2xl font-bold text-slate-900">{(meta?.total ?? list.length).toLocaleString("id-ID")}</p></Card>
