@@ -25,7 +25,7 @@ const monthEnd = (m: string) => {
   return `${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`;
 };
 
-const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
+const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
 interface Plot { id: number; plot_name: string | null; farmer_name?: string | null }
@@ -52,6 +52,9 @@ export default function StockOutList() {
   // Pre-Finance (farmer debt) or Profit Sharing (cost of the plot's season):
   // the same warehouse issues both, and a reader has to be able to tell them apart.
   const [scheme, setScheme] = useState("");
+  // One crop at a time (feedback JNBS finance): this list covers every commodity,
+  // not only banana, and each crop has its own scheme and price.
+  const [commodityId, setCommodityId] = useState("");
   const bound = useEntityBound();
   const [entityFilter, setEntityFilter] = useState("");
   const { data: warehouses } = useApi<Warehouse[]>("warehouses", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
@@ -66,7 +69,14 @@ export default function StockOutList() {
     entity_id: entityFilter || undefined,
     search: search || undefined,
     scheme: scheme || undefined,
-  }, [warehouseId, plotId, entityFilter, search, scheme, view]);
+    commodity_id: commodityId || undefined,
+  }, [warehouseId, plotId, entityFilter, search, scheme, commodityId, view]);
+  // The buttons: every commodity with goods out under the other filters, largest first.
+  const { data: crops } = useApi<{ id: number | null; name: string; amount: number }[]>("stock-out/summary", {
+    group: "commodity", warehouse_id: warehouseId || undefined, entity_id: entityFilter || undefined,
+    from: from || undefined, to: to || undefined, scheme: scheme || undefined,
+  }, [warehouseId, entityFilter, from, to, scheme]);
+  const short = (n?: string | null) => (n ? (n.match(/\(([^)]+)\)/)?.[1] ?? n) : "");
 
   const th = "text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap";
 
@@ -89,6 +99,20 @@ export default function StockOutList() {
           </Button>
         )}
       </div>
+
+      {view !== "loans" && (
+        <div className="flex flex-wrap gap-2">
+          {[{ id: "", name: "Semua komoditas", amount: (crops || []).reduce((t, c) => t + Number(c.amount || 0), 0) },
+            ...(crops || []).map((c) => ({ id: String(c.id ?? 0), name: short(c.name) || "Tanpa komoditas", amount: Number(c.amount || 0) }))]
+            .map((c) => (
+              <button key={c.id || "all"} type="button" onClick={() => setCommodityId(c.id)}
+                className={`text-left rounded-2xl border px-4 py-2.5 min-w-[130px] transition-colors ${commodityId === c.id ? "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-200" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                <div className={`text-base font-bold ${commodityId === c.id ? "text-emerald-800" : "text-slate-800"}`}>{c.name}</div>
+                <div className="text-xs text-slate-500 font-mono">{fmtRp(c.amount)}</div>
+              </button>
+            ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-1 bg-slate-100 rounded-xl p-1 w-fit">
         {VIEWS.map(([v, label, Icon]) => (
@@ -142,7 +166,7 @@ export default function StockOutList() {
             <StockOutSummary group={view} query={{
               warehouse_id: warehouseId || undefined, entity_id: entityFilter || undefined,
               from: from || undefined, to: to || undefined, search: search || undefined,
-              scheme: scheme || undefined,
+              scheme: scheme || undefined, commodity_id: commodityId || undefined,
             }} />
           </div>
         )}

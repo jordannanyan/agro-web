@@ -68,7 +68,7 @@ export default function StockOutSummary({ group, query }: { group: Group; query:
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-sm text-slate-600">
           <b className="text-slate-900">{rows.length}</b> {noun} menerima barang senilai <b className="text-slate-900">{fmtRp(total)}</b>
-          <span className="text-slate-500"> — <b>semua komoditas</b> (pisang, kopi, mangga, balsa, …), dipisah per komoditas & skema di tiap kartu</span>
+          {!query.commodity_id && <span className="text-slate-500"> — <b>semua komoditas</b> (pisang, kopi, mangga, balsa, …), dipisah per komoditas & skema di tiap kartu</span>}
         </p>
         <div className="flex gap-2">
           <button type="button" onClick={() => setOpen(new Set(rows.map((r) => String(r.id))))} className="text-xs text-emerald-700 hover:underline">Buka semua</button>
