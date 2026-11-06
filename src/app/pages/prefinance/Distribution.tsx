@@ -12,8 +12,9 @@ import { usePagedApi, Pagination } from "../../components/Pagination";
 import { canWriteOperations } from "../../lib/permissions";
 import { useAuth } from "../../store/AuthContext";
 import CostEntryDialog, { CostHowTo } from "../../components/CostEntryDialog";
+import CommodityButtons, { MonthRange } from "../../components/CommodityButtons";
 
-const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
+const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
 
 // Loans imported from the ledgers have no sapropdi_id — they must not move stock —
@@ -47,7 +48,11 @@ function typeBadge(type: string) {
 type Kind = "debt" | "ps";
 const TYPE_LABEL: Record<string, string> = { Labor: "Tenaga Kerja" };
 
-export default function Distribution({ kind = "debt", embedded = false }: { kind?: Kind; embedded?: boolean }) {
+// When embedded (Profit Sharing → Biaya Lahan Bagi Hasil) the page above owns the
+// commodity, month, PT and search filters and passes them in.
+export interface SharedFilters { entity_id?: string; commodity_id?: string; from?: string; to?: string; search?: string }
+
+export default function Distribution({ kind = "debt", embedded = false, shared }: { kind?: Kind; embedded?: boolean; shared?: SharedFilters }) {
   const isPS = kind === "ps";
   const navigate = useNavigate();
   // Rows are entity-scoped by the API; accounts that span several PTs get the
@@ -59,16 +64,30 @@ export default function Distribution({ kind = "debt", embedded = false }: { kind
   const [entityFilter, setEntityFilter] = useState("");
   const [search, setSearch] = useState("");
   const [typeId, setTypeId] = useState("");
+  // The Stock Out filters: commodity, warehouse, month range (plus type, PT, search).
+  const [commodityId, setCommodityId] = useState("");
+  const [warehouseId, setWarehouseId] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const { data: types } = useApi<{ id: number; type_name: string }[]>("pre-finance-types");
-  // Both filters are sent to the server, so a farmer on page 12 is still found.
-  const {
-    rows: list, meta, page, setPage, perPage, setPerPage, loading, error, refetch,
-  } = usePagedApi<DistRow>("pre-finance/distributions", {
-    entity_id: entityFilter || undefined,
-    search: search || undefined,
+  const ent = shared ? shared.entity_id : entityFilter;
+  const { data: warehouses } = useApi<{ id: number; warehouse_name: string }[]>("warehouses", ent ? { entity_id: ent } : undefined, [ent]);
+  const base = {
+    entity_id: ent || undefined,
+    search: (shared ? shared.search : search) || undefined,
     kind,
     pre_finance_type_id: typeId || undefined,
-  }, [entityFilter, search, kind, typeId]);
+    warehouse_id: warehouseId || undefined,
+    from: (shared ? shared.from : from) || undefined,
+    to: (shared ? shared.to : to) || undefined,
+  };
+  const { data: crops } = useApi<{ id: number; name: string | null; amount: number }[]>("pre-finance/distributions/by-commodity",
+    base, [JSON.stringify(base)]);
+  // All filters go to the server, so a farmer on page 12 is still found.
+  const query = { ...base, commodity_id: (shared ? shared.commodity_id : commodityId) || undefined };
+  const {
+    rows: list, meta, page, setPage, perPage, setPerPage, loading, error, refetch,
+  } = usePagedApi<DistRow>("pre-finance/distributions", query, [JSON.stringify(query)]);
   // Whole-set total, not the page's — the server sums the same filtered query.
   const total = Number((meta as any)?.totals?.total_amount ?? 0);
 
@@ -113,12 +132,19 @@ export default function Distribution({ kind = "debt", embedded = false }: { kind
         <Card className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">{isPS ? "Total Biaya Bagi Hasil" : "Total Pinjaman"}</p><p className="text-2xl font-bold text-amber-700">{fmtRp(total)}</p></Card>
       </div>
 
-      <Card className="p-4"><div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Cari petani, lahan, barang…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-        <select aria-label="Tipe" className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700" value={typeId} onChange={(e) => { setTypeId(e.target.value); setPage(1); }}>
+      {!shared && <CommodityButtons items={crops} value={commodityId} onChange={setCommodityId} />}
+
+      <Card className="p-4"><div className="flex flex-wrap items-center gap-3">
+        <select aria-label="Tipe" className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-700" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
           <option value="">Semua tipe</option>
           {(types || []).map((t) => <option key={t.id} value={t.id}>{TYPE_LABEL[t.type_name] ?? t.type_name}</option>)}
         </select>
+        <select aria-label="Gudang" className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-700" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+          <option value="">Semua gudang</option>
+          {(warehouses || []).map((w) => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}
+        </select>
+        {!shared && <MonthRange from={from} to={to} onFrom={setFrom} onTo={setTo} />}
+        {!shared && <div className="relative flex-1 min-w-[200px] max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input placeholder="Cari petani, lahan, barang…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div>}
       </div></Card>
 
       <Card>

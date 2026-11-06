@@ -7,7 +7,8 @@
 // Their total per plot is what the plot's margin has to clear before the farmer's
 // share is paid out (Bayar Bagi Hasil).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
 import { Layers, Package, Wrench } from "lucide-react";
 import { Card } from "../components/ui/card";
 import { useApi } from "../lib/hooks";
@@ -17,6 +18,9 @@ import { OperationalInvestmentPanel } from "./ProfitSharing";
 import { useClientPage } from "../components/Pagination";
 import { useNavigate } from "react-router";
 import CostEntryDialog, { CostHowTo } from "../components/CostEntryDialog";
+import CommodityButtons, { MonthRange } from "../components/CommodityButtons";
+import { Search } from "lucide-react";
+import { Input } from "../components/ui/input";
 import { canWriteOperations } from "../lib/permissions";
 import { useAuth } from "../store/AuthContext";
 
@@ -33,7 +37,19 @@ export default function ProfitSharingCosts({ initialTab = "summary" }: { initial
   const bound = useEntityBound();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [entityFilter, setEntityFilter] = useState("");
-  const { data, loading, refetch } = useApi<Row[]>("profit-sharing/costs/summary", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
+  // The Stock Out filters, shared by the summary and the per-line tab.
+  const [commodityId, setCommodityId] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [search, setSearch] = useState("");
+  const filters = { entity_id: entityFilter || undefined, commodity_id: commodityId || undefined, from: from || undefined, to: to || undefined, search: search || undefined };
+  const [summary, setSummary] = useState<{ commodities?: { id: number; name: string | null; amount: number }[] } | null>(null);
+  const { data, loading, refetch } = useApi<Row[]>("profit-sharing/costs/summary", filters, [JSON.stringify(filters)]);
+  // The commodity buttons come with the summary (each crop's total, the other filters applied).
+  const noCom = { ...filters, commodity_id: undefined };
+  useEffect(() => {
+    api.getRaw<any>("profit-sharing/costs/summary", noCom).then(setSummary).catch(() => setSummary(null));
+  }, [JSON.stringify(noCom)]); // eslint-disable-line react-hooks/exhaustive-deps
   const navigate = useNavigate();
   const { user } = useAuth();
   const mayWrite = canWriteOperations(user);
@@ -64,6 +80,14 @@ export default function ProfitSharingCosts({ initialTab = "summary" }: { initial
       <CostHowTo ps mayWrite={mayWrite} onAdd={() => setAdding(true)} onStockOut={() => navigate("/warehouse/stock-out/create")} />
       {adding && <CostEntryDialog mode="ProfitSharing" onClose={() => setAdding(false)}
         onSaved={() => { refetch(); setLinesKey((k) => k + 1); setTab("lines"); }} />}
+
+      <CommodityButtons items={summary?.commodities} value={commodityId} onChange={setCommodityId} />
+      <Card className="p-4"><div className="flex flex-wrap items-center gap-3">
+        <MonthRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
+        <div className="relative flex-1 min-w-[200px] max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input placeholder="Cari lahan atau petani…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+        <span className="text-xs text-slate-400">Filter berlaku untuk Ringkasan dan Rincian Biaya.</span>
+      </div></Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {([["Saprodi", sum("saprodi"), "text-emerald-700"], ["Tenaga Kerja", sum("labour"), "text-blue-700"],
@@ -118,7 +142,7 @@ export default function ProfitSharingCosts({ initialTab = "summary" }: { initial
           {loading && <div className="p-10 text-center text-sm text-slate-400">Memuat…</div>}
         </Card>
       )}
-      {tab === "lines" && <Distribution key={linesKey} kind="ps" embedded />}
+      {tab === "lines" && <Distribution key={linesKey} kind="ps" embedded shared={filters as any} />}
       {tab === "ops" && <OperationalInvestmentPanel />}
     </div>
   );
