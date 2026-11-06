@@ -15,6 +15,10 @@ import { EntityScopeBar, EntityTag, useEntityBound } from "../components/EntityS
 import Distribution from "./prefinance/Distribution";
 import { OperationalInvestmentPanel } from "./ProfitSharing";
 import { useClientPage } from "../components/Pagination";
+import { useNavigate } from "react-router";
+import CostEntryDialog, { CostHowTo } from "../components/CostEntryDialog";
+import { canWriteOperations } from "../lib/permissions";
+import { useAuth } from "../store/AuthContext";
 
 const fmtRp = (n: number) => (Number(n || 0) === 0 ? "–" : `Rp ${Number(n).toLocaleString("id-ID", { maximumFractionDigits: 0 })}`);
 
@@ -29,14 +33,20 @@ export default function ProfitSharingCosts({ initialTab = "summary" }: { initial
   const bound = useEntityBound();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [entityFilter, setEntityFilter] = useState("");
-  const { data, loading } = useApi<Row[]>("profit-sharing/costs/summary", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
+  const { data, loading, refetch } = useApi<Row[]>("profit-sharing/costs/summary", entityFilter ? { entity_id: entityFilter } : undefined, [entityFilter]);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const mayWrite = canWriteOperations(user);
+  const [adding, setAdding] = useState(false);
+  // New lines go into the per-line list; remount it so it shows them.
+  const [linesKey, setLinesKey] = useState(0);
   const rows = data || [];
   const pg = useClientPage(rows);
   const sum = (k: keyof Row) => rows.reduce((s, r) => s + Number(r[k] || 0), 0);
   const th = "py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap";
   const td = "py-2.5 px-4 text-right font-mono text-sm whitespace-nowrap";
   const TABS: [Tab, string, typeof Layers][] = [
-    ["summary", "Ringkasan per Lahan", Layers], ["lines", "Rincian Gudang & Tenaga Kerja", Package], ["ops", "Catatan Biaya (Investasi Operasional)", Wrench],
+    ["summary", "Ringkasan per Lahan", Layers], ["lines", "Rincian Biaya (per baris)", Package], ["ops", "Catatan Bulanan (buku besar)", Wrench],
   ];
 
   return (
@@ -44,15 +54,16 @@ export default function ProfitSharingCosts({ initialTab = "summary" }: { initial
       <div>
         <h1 className="text-2xl text-slate-900 mb-1">Biaya Lahan Bagi Hasil</h1>
         <p className="text-sm text-slate-500">
-          Semua biaya lahan <span className="font-semibold text-violet-700">Profit Sharing</span> di satu tempat, dibagi menurut jenisnya:
-          <b> saprodi</b>, <b>tenaga kerja</b>, dan <b>operasional</b> (transport, ojek, material irigasi, dll.). Biayanya tercatat dua cara —
-          barang keluar gudang & minggu tenaga kerja baris per baris (tab Rincian Gudang & Tenaga Kerja), atau catatan biaya per bulan
-          seperti kolom labor & material buku besar SNBS (tab Catatan Biaya) — tapi di ringkasan dijumlah per jenis.
-          Totalnya per lahan yang harus dilampaui margin sebelum bagian petani dibayarkan. Ini bukan utang petani —
-          pinjaman Pre-Finance ada di Pre-Finance → Rincian Utang Saprodi.
+          Semua biaya lahan <span className="font-semibold text-violet-700">Profit Sharing</span>: saprodi, tenaga kerja, dan operasional.
+          Totalnya per lahan yang harus dilampaui margin sebelum bagian petani dibayarkan. Ini <b>bukan utang petani</b> — pinjaman
+          Pre-Finance ada di Pre-Finance → Rincian Utang Petani.
         </p>
         <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
       </div>
+
+      <CostHowTo ps mayWrite={mayWrite} onAdd={() => setAdding(true)} onStockOut={() => navigate("/warehouse/stock-out/create")} />
+      {adding && <CostEntryDialog mode="ProfitSharing" onClose={() => setAdding(false)}
+        onSaved={() => { refetch(); setLinesKey((k) => k + 1); setTab("lines"); }} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {([["Saprodi", sum("saprodi"), "text-emerald-700"], ["Tenaga Kerja", sum("labour"), "text-blue-700"],
@@ -107,7 +118,7 @@ export default function ProfitSharingCosts({ initialTab = "summary" }: { initial
           {loading && <div className="p-10 text-center text-sm text-slate-400">Memuat…</div>}
         </Card>
       )}
-      {tab === "lines" && <Distribution kind="ps" embedded />}
+      {tab === "lines" && <Distribution key={linesKey} kind="ps" embedded />}
       {tab === "ops" && <OperationalInvestmentPanel />}
     </div>
   );

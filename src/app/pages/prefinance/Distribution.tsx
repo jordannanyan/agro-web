@@ -11,6 +11,7 @@ import { EntityScopeBar, EntityTag, useEntityBound } from "../../components/Enti
 import { usePagedApi, Pagination } from "../../components/Pagination";
 import { canWriteOperations } from "../../lib/permissions";
 import { useAuth } from "../../store/AuthContext";
+import CostEntryDialog, { CostHowTo } from "../../components/CostEntryDialog";
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const num = (n: number) => Number(n || 0).toLocaleString("id-ID");
@@ -54,6 +55,7 @@ export default function Distribution({ kind = "debt", embedded = false }: { kind
   const bound = useEntityBound();
   const { user } = useAuth();
   const mayWrite = canWriteOperations(user);
+  const [adding, setAdding] = useState(false);
   const [entityFilter, setEntityFilter] = useState("");
   const [search, setSearch] = useState("");
   const [typeId, setTypeId] = useState("");
@@ -84,7 +86,7 @@ export default function Distribution({ kind = "debt", embedded = false }: { kind
     <div className={embedded ? "space-y-4" : "space-y-6 pb-8"}>
       {!embedded && <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl text-slate-900 mb-1">{isPS ? "Biaya Saprodi & Tenaga Kerja" : "Rincian Utang Saprodi"}</h1>
+          <h1 className="text-2xl text-slate-900 mb-1">{isPS ? "Biaya Saprodi & Tenaga Kerja" : "Rincian Utang Petani"}</h1>
           {isPS ? (
             <p className="text-sm text-slate-500">
               Saprodi dan tenaga kerja untuk lahan <span className="font-semibold text-violet-700">Profit Sharing</span>, baris per baris.
@@ -94,16 +96,17 @@ export default function Distribution({ kind = "debt", embedded = false }: { kind
             </p>
           ) : (
             <p className="text-sm text-slate-500">
-              Setiap pinjaman <span className="font-semibold text-sky-700">Pre-Finance</span> petani — saprodi dan tenaga kerja —
-              baris per baris, dari Stock Out gudang maupun dari buku besar. Inilah yang dicicil lewat potongan setoran.
-              Biaya lahan bagi hasil ada di Profit Sharing → Biaya Saprodi & TK.
+              Semua utang <span className="font-semibold text-sky-700">Pre-Finance</span> petani, baris per baris — saprodi dari gudang,
+              tenaga kerja, transport, dan biaya lain. Inilah yang dicicil lewat potongan setoran panen. Biaya lahan bagi hasil ada di
+              Profit Sharing → Biaya Lahan Bagi Hasil.
             </p>
           )}
           <EntityScopeBar className="mt-2" value={entityFilter} onChange={setEntityFilter} />
         </div>
         {/* Issuing goods is a warehouse act now — this page is the line-level record of it. */}
-        {mayWrite && <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate("/warehouse/stock-out/create")}><Plus className="w-4 h-4 mr-2" />Buat Stock Out</Button>}
       </div>}
+      {!embedded && <CostHowTo ps={isPS} mayWrite={mayWrite} onAdd={() => setAdding(true)} onStockOut={() => navigate("/warehouse/stock-out/create")} />}
+      {adding && <CostEntryDialog mode={isPS ? "ProfitSharing" : "PreFinance"} onClose={() => setAdding(false)} onSaved={refetch} />}
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Jumlah Baris</p><p className="text-2xl font-bold text-slate-900">{(meta?.total ?? list.length).toLocaleString("id-ID")}</p></Card>
@@ -141,7 +144,8 @@ export default function Distribution({ kind = "debt", embedded = false }: { kind
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{r.quantity != null ? num(r.quantity) : "—"}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-amber-700">{fmtRp(r.total_amount)}</td>
                   <td className="py-3 px-4">
-                    {r.shipped_at ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-semibold"><CheckCircle2 className="w-3.5 h-3.5" />Terkirim</span>
+                    {r.type_name !== "Saprodi" ? <span className="text-xs text-slate-300">—</span>
+                      : r.shipped_at ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-semibold"><CheckCircle2 className="w-3.5 h-3.5" />Terkirim</span>
                       : mayWrite ? <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => ship(r.id)}><Truck className="w-3.5 h-3.5 mr-1" />Kirim</Button>
                       : <span className="text-xs text-slate-400">Belum dikirim</span>}
                   </td>

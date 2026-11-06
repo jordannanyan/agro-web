@@ -76,7 +76,7 @@ const menuItems = [
       // Issuing goods is Gudang → Stock Out. Pre-Finance keeps what it owns: what
       // the farmer owes, line by line — including loans that never passed through a
       // warehouse here — and what has been paid back.
-      { id: "debt-lines",  label: "Rincian Utang Saprodi", path: "/prefinance/distribution" },
+      { id: "debt-lines",  label: "Rincian Utang Petani", path: "/prefinance/distribution" },
       { id: "installment", label: "Cicilan", path: "/prefinance/installment" },
       { id: "outstanding", label: "Outstanding Petani", path: "/prefinance/outstanding" },
       { id: "payback-rates", label: "Tarif Potongan", path: "/prefinance/payback-rates" },

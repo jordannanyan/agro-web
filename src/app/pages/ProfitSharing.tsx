@@ -416,11 +416,10 @@ export function OperationalInvestmentPanel() {
             <div className="flex items-start gap-3">
               <PackageMinus className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
               <div className="text-sm">
-                <p className="font-semibold text-orange-800">Saprodi dicatat lewat Stock Out, bukan di sini.</p>
+                <p className="font-semibold text-orange-800">Catatan bulanan dari buku besar (terutama SNBS).</p>
                 <p className="text-orange-700 mt-0.5">
-                  Barang yang keluar gudang harus mengurangi stok, dan itu hanya terjadi lewat Stock Out —
-                  yang juga otomatis terhitung sebagai investasi di laporan P/L. Form di bawah untuk biaya
-                  operasional non-barang saja (tenaga kerja, transport, sewa).
+                  Untuk biaya baru — tenaga kerja, transport, biaya lain — pakai tombol <b>Tambah Biaya</b> di atas: dicatat per tanggal
+                  dengan bukti, dan langsung masuk ringkasan. Saprodi (barang gudang) tetap lewat Stock Out supaya stok ikut berkurang.
                 </p>
                 <button onClick={() => navigate("/warehouse/stock-out/create")}
                   className="mt-2 text-sm font-semibold text-orange-800 underline underline-offset-2 hover:text-orange-900">
