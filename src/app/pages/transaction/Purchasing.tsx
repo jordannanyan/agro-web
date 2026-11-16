@@ -80,6 +80,12 @@ interface RepayPreview {
   capped: boolean;
 }
 
+// A starting Rp/kg per grade (GET purchasing/price-hints): the Pre-Finance rate's
+// final price, else the last price paid for that grade.
+interface PriceHint { grade_id: number | null; grade_name: string | null; price: number; source: "tarif" | "terakhir"; date: string; same_supplier?: boolean; }
+/** One grade of the delivery. `auto`: the price still follows the hint (nobody typed it). */
+interface GradeLine { key: number; grade_id: string; quantity: string; price: string; auto: boolean; }
+
 // ── Create Modal ──────────────────────────────────────────────────────────────
 function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collectors, warehouses, editRow }: {
   onClose: () => void; onSaved: () => void;
@@ -92,11 +98,22 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   const [plotId, setPlotId] = useState(editRow?.plot?.id ? String(editRow.plot.id) : "");
   const [collectorId, setCollectorId] = useState(editRow?.collector?.id ? String(editRow.collector.id) : "");
   const [commodityId, setCommodityId] = useState(editRow?.commodity?.id ? String(editRow.commodity.id) : "");
-  const [gradeId, setGradeId] = useState(editRow?.grade?.id ? String(editRow.grade.id) : "");
   const [warehouseId, setWarehouseId] = useState(editRow?.warehouse?.id ? String(editRow.warehouse.id) : "");
   const [date, setDate] = useState(editRow?.date ? String(editRow.date).slice(0, 10) : "");
-  const [quantity, setQuantity] = useState(editRow?.quantity != null ? String(editRow.quantity) : "");
-  const [price, setPrice] = useState(editRow?.price_per_unit != null ? String(editRow.price_per_unit) : "");
+  // A nota often holds several grades, each bought at its own Rp/kg: one line per
+  // grade, saved as one purchase each under the same nota number. An edit is one
+  // purchase, so one line.
+  const [lines, setLines] = useState<GradeLine[]>([{
+    key: 0,
+    grade_id: editRow?.grade?.id ? String(editRow.grade.id) : "",
+    quantity: editRow?.quantity != null ? String(editRow.quantity) : "",
+    price: editRow?.price_per_unit != null ? String(editRow.price_per_unit) : "",
+    auto: !editRow,
+  }]);
+  const multi = lines.length > 1;
+  const gradeId = lines[0].grade_id;
+  const quantity = lines[0].quantity;
+  const setLine = (i: number, patch: Partial<GradeLine>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const [invoice, setInvoice] = useState(editRow?.receipt_invoice ?? "");
   const [paid, setPaid] = useState<"paid" | "unpaid">(editRow?.payment_status ?? "unpaid");
   const [saving, setSaving] = useState(false);
@@ -168,12 +185,64 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   const scheme: Scheme = supplierType === "collector" ? "BeliPutus"
     : keepsOwn ? (editRow!.scheme as Scheme) : (selectedPlot?.scheme ?? "BeliPutus");
   const isPS = scheme === "ProfitSharing";
-  const priceNum = isPS ? 0 : (parseFloat(price) || 0);
-  const total = (parseFloat(quantity) || 0) * priceNum;
+  const lineTotal = (l: GradeLine) => (parseFloat(l.quantity) || 0) * (isPS ? 0 : (parseFloat(l.price) || 0));
+  const total = lines.reduce((s, l) => s + lineTotal(l), 0);
+  const totalKg = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0);
   const isPF = scheme === "PreFinance";
 
+  // ── Rp/kg per grade: filled in from the rate or the last price, then adjustable.
+  const [hints, setHints] = useState<PriceHint[]>([]);
+  const supplierKey = supplierType === "farmer" ? plotId : collectorId;
   useEffect(() => {
-    if (!isPF || !plotId || !date || !(Number(quantity) > 0)) { setPreview(null); return; }
+    if (!commodityId || !supplierKey || isPS) { setHints([]); return; }
+    const t = setTimeout(() => {
+      api.get<{ hints: PriceHint[] }>("purchasing/price-hints", {
+        commodities_id: commodityId, date: date || undefined,
+        ...(supplierType === "farmer" ? { plot_id: plotId } : { collector_id: collectorId }),
+      }).then((d) => setHints(d?.hints || [])).catch(() => setHints([]));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [commodityId, supplierKey, supplierType, plotId, collectorId, date, isPS]);
+  const hintFor = (g: string) => hints.find((h) => String(h.grade_id ?? "") === g);
+  // Lines nobody has typed a price into follow the hint for their grade.
+  useEffect(() => {
+    setLines((ls) => ls.map((l) => {
+      if (!l.auto) return l;
+      const h = hints.find((x) => String(x.grade_id ?? "") === l.grade_id);
+      return { ...l, price: h ? String(h.price) : "" };
+    }));
+  }, [hints]);
+  function chooseGrade(i: number, g: string) {
+    const l = lines[i];
+    const h = hintFor(g);
+    setLine(i, l.auto || !l.price ? { grade_id: g, price: h ? String(h.price) : "", auto: true } : { grade_id: g });
+  }
+  function addLine() {
+    const used = new Set(lines.map((l) => l.grade_id));
+    const next = grades.find((g) => !used.has(String(g.id)));
+    const g = next ? String(next.id) : "";
+    const h = hintFor(g);
+    setLines((ls) => [...ls, { key: Date.now(), grade_id: g, quantity: "", price: h ? String(h.price) : "", auto: true }]);
+  }
+  const dupGrade = new Set(lines.map((l) => l.grade_id)).size !== lines.length;
+
+  // Several grades: each line's deduction is worked out by the server from its own
+  // kilos and grade. Shown here as an estimate, one line per grade.
+  const [multiPreview, setMultiPreview] = useState<{ key: number; grade: string; total: number; rate: boolean }[]>([]);
+  const linesKey = lines.map((l) => `${l.grade_id}:${Number(l.quantity) || 0}`).join("|");
+  useEffect(() => {
+    if (!multi || !isPF || !plotId || !date) { setMultiPreview([]); return; }
+    const t = setTimeout(() => {
+      Promise.all(lines.filter((l) => Number(l.quantity) > 0).map((l) =>
+        api.get<RepayPreview>("pre-finance/payback-rates/preview", { plot_id: plotId, grade_id: l.grade_id || undefined, date, quantity: l.quantity })
+          .then((p) => ({ key: l.key, grade: grades.find((g) => String(g.id) === l.grade_id)?.grade_name ?? "Tanpa grade", total: Number(p?.total || 0), rate: !!p?.rate }))
+      )).then(setMultiPreview).catch(() => setMultiPreview([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [multi, isPF, plotId, date, linesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (multi || !isPF || !plotId || !date || !(Number(quantity) > 0)) { setPreview(null); return; }
     const t = setTimeout(() => {
       api.get<RepayPreview>("pre-finance/payback-rates/preview", {
         plot_id: plotId, grade_id: gradeId || undefined, date, quantity,
@@ -181,7 +250,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
       }).then(setPreview).catch(() => setPreview(null));
     }, 300);
     return () => clearTimeout(t);
-  }, [isPF, plotId, gradeId, date, quantity, isEdit, editRow]);
+  }, [multi, isPF, plotId, gradeId, date, quantity, isEdit, editRow]);
 
   // An edit that leaves plot, grade, date and kilos alone keeps the deduction it
   // has; change any of them and the server recomputes it from the rate.
@@ -190,12 +259,13 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     manual ? (manual[l.pre_finance_type_id] ?? 0) : keepsExisting ? (existing![l.pre_finance_type_id] ?? 0) : l.amount;
   const repayLines = (preview?.applies ? preview.lines : []).filter(
     (l) => l.per_kg > 0 || l.outstanding > 0 || repayAmount(l) > 0);
-  const repayTotal = repayLines.reduce((sum, l) => sum + repayAmount(l), 0);
+  const repayTotal = multi
+    ? multiPreview.reduce((s, p) => s + p.total, 0)
+    : repayLines.reduce((sum, l) => sum + repayAmount(l), 0);
   const repayOver = repayLines.some((l) => repayAmount(l) > Math.max(0, l.outstanding) + 0.5);
   // Typed amounts that are not what the rate gives need a reason.
   const repayDiffers = !!manual && repayLines.some((l) => Math.abs(repayAmount(l) - l.amount) > 0.5);
   const ratePerKg = preview?.rate ? Number(preview.rate.saprodi_per_kg) + Number(preview.rate.labor_per_kg) : 0;
-  const rateFinal = preview?.rate?.full_price != null ? Number(preview.rate.full_price) - ratePerKg : null;
 
   function setRepay(typeId: number, v: number) {
     const base: Record<number, number> = {};
@@ -206,7 +276,9 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   const selectCls = "w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-slate-50";
 
   async function save() {
-    if (!commodityId || !date || !quantity) { toast.error("Komoditas, tanggal, dan qty wajib diisi"); return; }
+    if (!commodityId || !date) { toast.error("Komoditas dan tanggal wajib diisi"); return; }
+    if (lines.some((l) => !(Number(l.quantity) > 0))) { toast.error("Isi kuantitas (kg) setiap grade"); return; }
+    if (dupGrade) { toast.error("Grade yang sama dipilih dua kali — gabungkan kilonya"); return; }
     if (supplierType === "farmer" && !plotId) { toast.error("Pilih plot petani"); return; }
     if (supplierType === "collector" && !collectorId) { toast.error("Pilih collector"); return; }
     if (isPF && repayOver) { toast.error("Potongan cicilan melebihi sisa utang petani"); return; }
@@ -218,13 +290,17 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
       warehouse_id: warehouseId ? Number(warehouseId) : null,
       date,
       quantity: Number(quantity),
-      price_per_unit: isPS ? 0 : (Number(price) || 0),
+      price_per_unit: isPS ? 0 : (Number(lines[0].price) || 0),
       receipt_invoice: invoice || null,
       payment_status: paid,
     };
     if (supplierType === "farmer") payload.plot_id = Number(plotId);
     else payload.collector_id = Number(collectorId);
-    if (isPF && manual) {
+    if (multi) {
+      payload.lines = lines.map((l) => ({
+        grade_id: l.grade_id ? Number(l.grade_id) : null, quantity: Number(l.quantity), price_per_unit: isPS ? 0 : (Number(l.price) || 0),
+      }));
+    } else if (isPF && manual) {
       payload.repayment = repayLines.map((l) => ({ pre_finance_type_id: l.pre_finance_type_id, amount: repayAmount(l) }));
       if (repayDiffers) payload.repayment_reason = reason.trim();
     } else if (isPF && forceAuto) {
@@ -234,8 +310,8 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     try {
       if (isEdit) await api.put(`purchasing/${editRow!.id}`, payload);
       else await api.post("purchasing", payload);
-      toast.success(isEdit ? "Pembelian diperbarui" : "Pembelian tercatat");
-      if (isPF && !manual && preview?.applies && !preview.rate && !keepsExisting && repayLines.length > 0) {
+      toast.success(isEdit ? "Pembelian diperbarui" : multi ? `${lines.length} grade tercatat (satu baris per grade)` : "Pembelian tercatat");
+      if (!multi && isPF && !manual && preview?.applies && !preview.rate && !keepsExisting && repayLines.length > 0) {
         toast.warning("Plot ini belum punya tarif potongan — tidak ada cicilan yang dipotong.");
       }
       onSaved(); onClose();
@@ -322,7 +398,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <Label className="text-xs text-slate-600 mb-1.5 block">Komoditas *</Label>
               <select value={commodityId} onChange={(e) => chooseCommodity(e.target.value)} className={selectCls}>
@@ -330,16 +406,6 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
                 {commodities.map((c) => <option key={c.id} value={c.id}>{c.commodities_name}</option>)}
               </select>
             </div>
-            <div>
-              <Label className="text-xs text-slate-600 mb-1.5 block">Grade</Label>
-              <select value={gradeId} onChange={(e) => setGradeId(e.target.value)} className={selectCls}>
-                <option value="">—</option>
-                {grades.map((g) => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs text-slate-600 mb-1.5 block">Tanggal *</Label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -353,23 +419,82 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs text-slate-600 mb-1.5 block">Kuantitas (Kg) *</Label>
-              <Input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
-            </div>
-            <div>
-              <Label className="text-xs text-slate-600 mb-1.5 block">Harga / Kg{isPF ? " (harga final)" : ""}</Label>
-              <Input type="number" value={isPS ? "0" : price} onChange={(e) => setPrice(e.target.value)} disabled={isPS} placeholder="0" />
-              {isPF && rateFinal != null && Number(price) !== rateFinal && (
-                <button type="button" onClick={() => setPrice(String(rateFinal))} className="mt-1 text-xs text-amber-700 hover:underline">
-                  Harga final menurut tarif: {fmtRp(rateFinal)} — pakai
+          {/* Grade lines: each grade its own kilos and Rp/kg. The price starts from
+              the plot's rate or the last price paid for that grade, and is the
+              admin's to adjust to what was actually paid. */}
+          <div>
+            <div className="flex items-end justify-between mb-1.5">
+              <div>
+                <Label className="text-xs text-slate-600 block">Grade, Kuantitas & Harga / Kg{isPF ? " (harga final, setelah potongan)" : ""} *</Label>
+                {!isPS && <p className="text-[11px] text-slate-400 mt-0.5">Harga terisi otomatis dari tarif / harga terakhir — ubah bila nota berbeda.</p>}
+              </div>
+              {!isEdit && (
+                <button type="button" onClick={addLine} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline">
+                  <Plus className="w-3.5 h-3.5" />Tambah grade
                 </button>
               )}
             </div>
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="grid grid-cols-[1.1fr_1fr_1.3fr_1.1fr_32px] gap-2 px-3 py-2 bg-slate-50 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                <span>Grade</span><span className="text-right">Kg</span><span className="text-right">Harga / Kg</span><span className="text-right">Subtotal</span><span />
+              </div>
+              {lines.map((l, i) => {
+                const h = hintFor(l.grade_id);
+                const dup = lines.some((x, j) => j !== i && x.grade_id === l.grade_id);
+                return (
+                  <div key={l.key} className="grid grid-cols-[1.1fr_1fr_1.3fr_1.1fr_32px] gap-2 px-3 py-2 border-t border-slate-100 items-start">
+                    <select value={l.grade_id} onChange={(e) => chooseGrade(i, e.target.value)} className={`${selectCls} ${dup ? "border-red-300 bg-red-50" : ""}`}>
+                      <option value="">Tanpa grade</option>
+                      {grades.map((g) => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
+                    </select>
+                    <Input type="number" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} placeholder="0" className="text-right" />
+                    <div>
+                      <Input type="number" value={isPS ? "0" : l.price} disabled={isPS} placeholder="0" className="text-right"
+                        onChange={(e) => setLine(i, { price: e.target.value, auto: false })} />
+                      {!isPS && h && (
+                        Number(l.price) === Number(h.price)
+                          ? <p className="text-[10px] text-slate-400 mt-0.5 text-right">{h.source === "tarif" ? "dari tarif plot" : `harga terakhir ${String(h.date).slice(0, 10)}`}</p>
+                          : <button type="button" onClick={() => setLine(i, { price: String(h.price), auto: true })}
+                              className="block ml-auto text-[10px] text-amber-700 hover:underline mt-0.5">
+                              {h.source === "tarif" ? "tarif" : "terakhir"} {fmtRp(h.price)} — pakai
+                            </button>
+                      )}
+                    </div>
+                    <span className="text-sm font-mono text-slate-700 text-right pt-2">{fmtRp(lineTotal(l))}</span>
+                    {multi
+                      ? <button type="button" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} className="pt-2 text-slate-400 hover:text-red-500" title="Hapus grade"><Trash2 className="w-4 h-4" /></button>
+                      : <span />}
+                  </div>
+                );
+              })}
+              {multi && (
+                <div className="grid grid-cols-[1.1fr_1fr_1.3fr_1.1fr_32px] gap-2 px-3 py-2 border-t border-slate-200 bg-slate-50 text-sm font-semibold">
+                  <span className="text-slate-600">Total</span>
+                  <span className="text-right font-mono">{totalKg.toLocaleString("id-ID")}</span>
+                  <span className="text-right text-xs text-slate-400 pt-0.5">{totalKg > 0 && !isPS ? `rata-rata ${fmtRp(Math.round(total / totalKg))}` : ""}</span>
+                  <span className="text-right font-mono">{fmtRp(total)}</span><span />
+                </div>
+              )}
+            </div>
+            {dupGrade && <p className="text-xs text-red-600 mt-1">Grade yang sama dipilih dua kali — gabungkan kilonya.</p>}
+            {multi && <p className="text-[11px] text-slate-400 mt-1">Disimpan sebagai {lines.length} baris pembelian (satu per grade) dengan nomor nota yang sama.</p>}
           </div>
 
-          {isPF && plotId && (
+          {isPF && plotId && multi && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-2">
+              <p className="text-sm font-semibold text-slate-800">Potongan Cicilan Utang (perkiraan)</p>
+              <p className="text-xs text-slate-500">Dihitung otomatis per grade dari tarif potongan plot saat disimpan, dibatasi sisa utang. Untuk mengisi potongan manual, simpan grade itu sendiri-sendiri.</p>
+              {multiPreview.map((p) => (
+                <div key={p.key} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Grade {p.grade}{!p.rate ? " · belum ada tarif" : ""}</span>
+                  <span className="font-mono text-slate-800">{fmtRp(p.total)}</span>
+                </div>
+              ))}
+              {!multiPreview.length && <p className="text-xs text-slate-400">Isi tanggal dan kuantitas untuk menghitung potongan.</p>}
+            </div>
+          )}
+
+          {isPF && plotId && !multi && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
