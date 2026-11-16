@@ -69,6 +69,7 @@ function SchemeBadge({ scheme }: { scheme: Scheme }) {
 const shortCommodity = (n?: string | null) => (n ? (n.match(/\(([^)]+)\)/)?.[1] ?? n) : "");
 
 const fmtRp = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 // What the API would deduct for a delivery (GET pre-finance/payback-rates/preview).
 interface RepayLine { pre_finance_type_id: number; type_name: string; per_kg: number; computed: number; outstanding: number; amount: number; }
@@ -119,11 +120,13 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   const [saving, setSaving] = useState(false);
 
   // ── Loan repayment (pre-finance) ──
-  // Left alone, the server deducts kilos × the plot's payback rate. The amounts
-  // are sent only when someone typed them, so an untouched form and the mobile
-  // app book exactly the same thing.
+  // Left alone, the server deducts kilos × the plot's payback rate. Each type's
+  // deduction can be set as Rp/kg (follows the kilos) or as a Rupiah amount; the
+  // amounts are sent only when someone typed them, so an untouched form and the
+  // mobile app book exactly the same thing.
   const [preview, setPreview] = useState<RepayPreview | null>(null);
-  const [manual, setManual] = useState<Record<number, number> | null>(null);
+  const [ovr, setOvr] = useState<Record<number, { by: "kg" | "rp"; v: number }> | null>(null);
+  const manual = !!ovr && Object.keys(ovr).length > 0;
   const [existing, setExisting] = useState<Record<number, number> | null>(null);
   const [forceAuto, setForceAuto] = useState(false);
   const [reason, setReason] = useState(editRow?.repayment_reason ?? "");
@@ -227,19 +230,47 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   const dupGrade = new Set(lines.map((l) => l.grade_id)).size !== lines.length;
 
   // Several grades: each line's deduction is worked out by the server from its own
-  // kilos and grade. Shown here as an estimate, one line per grade.
-  const [multiPreview, setMultiPreview] = useState<{ key: number; grade: string; total: number; rate: boolean }[]>([]);
+  // kilos and grade — from the rate, or from the Rp/kg typed here for every grade
+  // (repayment_per_kg). Shown as an estimate, one line per grade, taking the debt
+  // down line by line the way the server books them.
+  const [multiPreview, setMultiPreview] = useState<{ key: number; grade: string; p: RepayPreview }[]>([]);
+  const [multiKg, setMultiKg] = useState<Record<number, string>>({});
   const linesKey = lines.map((l) => `${l.grade_id}:${Number(l.quantity) || 0}`).join("|");
   useEffect(() => {
     if (!multi || !isPF || !plotId || !date) { setMultiPreview([]); return; }
     const t = setTimeout(() => {
       Promise.all(lines.filter((l) => Number(l.quantity) > 0).map((l) =>
         api.get<RepayPreview>("pre-finance/payback-rates/preview", { plot_id: plotId, grade_id: l.grade_id || undefined, date, quantity: l.quantity })
-          .then((p) => ({ key: l.key, grade: grades.find((g) => String(g.id) === l.grade_id)?.grade_name ?? "Tanpa grade", total: Number(p?.total || 0), rate: !!p?.rate }))
+          .then((p) => ({ key: l.key, grade: grades.find((g) => String(g.id) === l.grade_id)?.grade_name ?? "Tanpa grade", p }))
       )).then(setMultiPreview).catch(() => setMultiPreview([]));
     }, 300);
     return () => clearTimeout(t);
   }, [multi, isPF, plotId, date, linesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const kgTyped = (typeId: number) => {
+    const v = multiKg[typeId];
+    return v !== undefined && v !== "" && Number(v) >= 0 ? Number(v) : null;
+  };
+  const multiEst = useMemo(() => {
+    const left: Record<number, number> = {};
+    return multiPreview.map(({ key, grade, p }) => {
+      const qty = Number(lines.find((l) => l.key === key)?.quantity) || 0;
+      let sum = 0;
+      for (const l of p?.applies ? p.lines : []) {
+        if (!(l.pre_finance_type_id in left)) left[l.pre_finance_type_id] = Math.max(0, r2(l.outstanding));
+        const amt = Math.min(r2(qty * (kgTyped(l.pre_finance_type_id) ?? l.per_kg)), left[l.pre_finance_type_id]);
+        left[l.pre_finance_type_id] = r2(left[l.pre_finance_type_id] - amt);
+        sum += amt;
+      }
+      return { key, grade, total: r2(sum), rate: !!p?.rate };
+    });
+  }, [multiPreview, multiKg, linesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The types a deduction can be typed for: the ones the farmer still owes on.
+  const multiTypes = (multiPreview[0]?.p?.applies ? multiPreview[0].p.lines : []).filter((l) => l.outstanding > 0 || l.per_kg > 0);
+  const multiManual = multiTypes.some((t) => kgTyped(t.pre_finance_type_id) != null);
+  const multiDiffers = multiPreview.some(({ p }) => (p?.lines || []).some((l) => {
+    const k = kgTyped(l.pre_finance_type_id);
+    return k != null && Math.abs(k - l.per_kg) > 0.005;
+  }));
 
   useEffect(() => {
     if (multi || !isPF || !plotId || !date || !(Number(quantity) > 0)) { setPreview(null); return; }
@@ -255,22 +286,32 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   // An edit that leaves plot, grade, date and kilos alone keeps the deduction it
   // has; change any of them and the server recomputes it from the rate.
   const keepsExisting = isEdit && !forceAuto && driversKey === initialKey && existing !== null;
-  const repayAmount = (l: RepayLine) =>
-    manual ? (manual[l.pre_finance_type_id] ?? 0) : keepsExisting ? (existing![l.pre_finance_type_id] ?? 0) : l.amount;
+  const qtyNum = Number(quantity) || 0;
+  // Rp/kg typed: kilos × that, capped by the debt like the rate is.
+  const kgAmount = (l: RepayLine, perKg: number) => Math.min(r2(qtyNum * perKg), Math.max(0, r2(l.outstanding)));
+  const repayAmount = (l: RepayLine) => {
+    const o = ovr?.[l.pre_finance_type_id];
+    if (o) return o.by === "rp" ? o.v : kgAmount(l, o.v);
+    return keepsExisting ? (existing![l.pre_finance_type_id] ?? 0) : l.amount;
+  };
+  const repayPerKg = (l: RepayLine) => {
+    const o = ovr?.[l.pre_finance_type_id];
+    if (o?.by === "kg") return o.v;
+    if (o || keepsExisting) return qtyNum > 0 ? r2(repayAmount(l) / qtyNum) : 0;
+    return l.per_kg;
+  };
   const repayLines = (preview?.applies ? preview.lines : []).filter(
     (l) => l.per_kg > 0 || l.outstanding > 0 || repayAmount(l) > 0);
   const repayTotal = multi
-    ? multiPreview.reduce((s, p) => s + p.total, 0)
+    ? multiEst.reduce((s, p) => s + p.total, 0)
     : repayLines.reduce((sum, l) => sum + repayAmount(l), 0);
   const repayOver = repayLines.some((l) => repayAmount(l) > Math.max(0, l.outstanding) + 0.5);
   // Typed amounts that are not what the rate gives need a reason.
-  const repayDiffers = !!manual && repayLines.some((l) => Math.abs(repayAmount(l) - l.amount) > 0.5);
+  const repayDiffers = manual && repayLines.some((l) => Math.abs(repayAmount(l) - l.amount) > 0.5);
   const ratePerKg = preview?.rate ? Number(preview.rate.saprodi_per_kg) + Number(preview.rate.labor_per_kg) : 0;
 
-  function setRepay(typeId: number, v: number) {
-    const base: Record<number, number> = {};
-    repayLines.forEach((l) => { base[l.pre_finance_type_id] = repayAmount(l); });
-    setManual({ ...base, ...(manual || {}), [typeId]: v });
+  function setRepay(typeId: number, by: "kg" | "rp", v: number) {
+    setOvr({ ...(ovr || {}), [typeId]: { by, v } });
   }
 
   const selectCls = "w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-slate-50";
@@ -282,7 +323,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     if (supplierType === "farmer" && !plotId) { toast.error("Pilih plot petani"); return; }
     if (supplierType === "collector" && !collectorId) { toast.error("Pilih collector"); return; }
     if (isPF && repayOver) { toast.error("Potongan cicilan melebihi sisa utang petani"); return; }
-    if (isPF && repayDiffers && !reason.trim()) { toast.error("Potongan berbeda dari tarif — isi alasannya"); return; }
+    if (isPF && (multi ? multiDiffers : repayDiffers) && !reason.trim()) { toast.error("Potongan berbeda dari tarif — isi alasannya"); return; }
     const payload: any = {
       supplier_type: supplierType,
       commodities_id: Number(commodityId),
@@ -300,6 +341,12 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
       payload.lines = lines.map((l) => ({
         grade_id: l.grade_id ? Number(l.grade_id) : null, quantity: Number(l.quantity), price_per_unit: isPS ? 0 : (Number(l.price) || 0),
       }));
+      if (isPF && multiManual) {
+        payload.repayment_per_kg = multiTypes
+          .filter((t) => kgTyped(t.pre_finance_type_id) != null)
+          .map((t) => ({ pre_finance_type_id: t.pre_finance_type_id, per_kg: kgTyped(t.pre_finance_type_id) }));
+        if (multiDiffers) payload.repayment_reason = reason.trim();
+      }
     } else if (isPF && manual) {
       payload.repayment = repayLines.map((l) => ({ pre_finance_type_id: l.pre_finance_type_id, amount: repayAmount(l) }));
       if (repayDiffers) payload.repayment_reason = reason.trim();
@@ -425,7 +472,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
           <div>
             <div className="flex items-end justify-between mb-1.5">
               <div>
-                <Label className="text-xs text-slate-600 block">Grade, Kuantitas & Harga / Kg{isPF ? " (harga final, setelah potongan)" : ""} *</Label>
+                <Label className="text-xs text-slate-600 block">Grade, Kuantitas & Harga / Kg{isPF ? " (harga penuh, sebelum potongan)" : ""} *</Label>
                 {!isPS && <p className="text-[11px] text-slate-400 mt-0.5">Harga terisi otomatis dari tarif / harga terakhir — ubah bila nota berbeda.</p>}
               </div>
               {!isEdit && (
@@ -483,14 +530,39 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
           {isPF && plotId && multi && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-2">
               <p className="text-sm font-semibold text-slate-800">Potongan Cicilan Utang (perkiraan)</p>
-              <p className="text-xs text-slate-500">Dihitung otomatis per grade dari tarif potongan plot saat disimpan, dibatasi sisa utang. Untuk mengisi potongan manual, simpan grade itu sendiri-sendiri.</p>
-              {multiPreview.map((p) => (
+              <p className="text-xs text-slate-500">Kg × potongan per kg, per grade, dibatasi sisa utang. Kosongkan untuk memakai tarif plot; isi untuk mengganti tarif di semua grade nota ini.</p>
+              {multiTypes.length > 0 && (
+                <div className="grid grid-cols-2 gap-3">
+                  {multiTypes.map((t) => (
+                    <div key={t.pre_finance_type_id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <Label className="text-xs text-slate-600">{t.type_name} Rp/kg</Label>
+                        <span className="text-[11px] text-slate-400">Sisa {fmtRp(t.outstanding)}</span>
+                      </div>
+                      <Input type="number" min={0} value={multiKg[t.pre_finance_type_id] ?? ""}
+                        placeholder={`tarif ${t.per_kg.toLocaleString("id-ID")}`}
+                        onChange={(e) => setMultiKg((m) => ({ ...m, [t.pre_finance_type_id]: e.target.value }))} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {multiEst.map((p) => (
                 <div key={p.key} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600">Grade {p.grade}{!p.rate ? " · belum ada tarif" : ""}</span>
+                  <span className="text-slate-600">Grade {p.grade}{!p.rate && !multiManual ? " · belum ada tarif" : ""}</span>
                   <span className="font-mono text-slate-800">{fmtRp(p.total)}</span>
                 </div>
               ))}
               {!multiPreview.length && <p className="text-xs text-slate-400">Isi tanggal dan kuantitas untuk menghitung potongan.</p>}
+              {multiPreview.length > 0 && !multiTypes.length && (
+                <p className="text-xs text-slate-600">Petani ini tidak punya utang Pre-Finance yang tercatat — tidak ada yang dipotong.</p>
+              )}
+              {multiDiffers && (
+                <div>
+                  <Label className="text-xs text-slate-600 mb-1.5 block">Alasan potongan berbeda dari tarif *</Label>
+                  <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={255}
+                    placeholder="mis. petani minta potongan saprodi Rp 1.000/kg" />
+                </div>
+              )}
             </div>
           )}
 
@@ -506,7 +578,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
                   </p>
                 </div>
                 {(manual || keepsExisting) && preview?.applies && (
-                  <button type="button" onClick={() => { setManual(null); setForceAuto(true); }}
+                  <button type="button" onClick={() => { setOvr(null); setForceAuto(true); }}
                     className="flex items-center gap-1 text-xs text-amber-700 hover:underline whitespace-nowrap">
                     <RotateCcw className="w-3 h-3" />Hitung dari tarif
                   </button>
@@ -528,23 +600,39 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
                 </div>
               )}
 
+              {repayLines.length > 0 && (
+                <div className="grid grid-cols-[1fr_1fr_1.3fr] gap-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                  <span>Jenis</span><span className="text-right">Rp / kg</span><span className="text-right">Potongan (Rp)</span>
+                </div>
+              )}
               {repayLines.map((l) => {
                 const val = repayAmount(l);
+                const perKg = repayPerKg(l);
+                const o = ovr?.[l.pre_finance_type_id];
                 const over = val > Math.max(0, l.outstanding) + 0.5;
+                const capped = o?.by === "kg" ? r2(qtyNum * o.v) > val + 0.5 : !o && !keepsExisting && l.amount < l.computed;
                 return (
                   <div key={l.pre_finance_type_id}>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label className="text-xs text-slate-600">
-                        {l.type_name}{l.per_kg > 0 ? ` · ${fmtRp(l.per_kg)}/kg` : ""}
-                      </Label>
-                      <span className="text-xs text-slate-400">Sisa utang: {fmtRp(l.outstanding)}</span>
+                    <div className="grid grid-cols-[1fr_1fr_1.3fr] gap-2 items-start">
+                      <div className="pt-1.5">
+                        <p className="text-sm text-slate-700">{l.type_name}</p>
+                        <p className="text-[11px] text-slate-400">Sisa utang {fmtRp(l.outstanding)}</p>
+                      </div>
+                      <div>
+                        <Input type="number" min={0} value={o?.by === "kg" ? String(o.v) : perKg ? String(perKg) : ""} placeholder="0"
+                          onChange={(e) => setRepay(l.pre_finance_type_id, "kg", Math.max(0, Number(e.target.value) || 0))}
+                          className="text-right" />
+                        {o && Math.abs(perKg - l.per_kg) > 0.005 && (
+                          <p className="text-[10px] text-slate-400 mt-0.5 text-right">tarif {fmtRp(l.per_kg)}/kg</p>
+                        )}
+                      </div>
+                      <Input type="number" min={0} value={val ? String(val) : ""} placeholder="0"
+                        onChange={(e) => setRepay(l.pre_finance_type_id, "rp", Math.max(0, Number(e.target.value) || 0))}
+                        className={`text-right ${over ? "border-red-300 bg-red-50" : ""}`} />
                     </div>
-                    <Input type="number" value={val ? String(val) : ""} placeholder="0"
-                      onChange={(e) => setRepay(l.pre_finance_type_id, Number(e.target.value) || 0)}
-                      className={over ? "border-red-300 bg-red-50" : ""} />
-                    {over && <p className="text-xs text-red-600 mt-1">Melebihi sisa utang</p>}
-                    {!manual && !keepsExisting && l.amount < l.computed && (
-                      <p className="text-xs text-amber-700 mt-1">Dibatasi sisa utang (tarif: {fmtRp(l.computed)})</p>
+                    {over && <p className="text-xs text-red-600 mt-1 text-right">Melebihi sisa utang</p>}
+                    {capped && (
+                      <p className="text-xs text-amber-700 mt-1 text-right">Dibatasi sisa utang (kg × Rp/kg: {fmtRp(o?.by === "kg" ? r2(qtyNum * o.v) : l.computed)})</p>
                     )}
                   </div>
                 );
