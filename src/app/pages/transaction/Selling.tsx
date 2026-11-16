@@ -511,6 +511,7 @@ export default function Selling() {
   const pg = useClientPage(list);
   const totalRevenue = list.reduce((s, r) => s + Number(r.total_revenue || 0), 0);
   const totalVol = list.reduce((s, r) => s + Number(r.accepted_volume || 0), 0);
+  const totalFee = list.reduce((s, r) => s + Number(r.fee_total || 0), 0);
 
   async function remove(id: number) {
     if (!confirm("Hapus data penjualan ini?")) return;
@@ -526,8 +527,8 @@ export default function Selling() {
         {mayWrite && <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { setEditRow(null); setShowModal(true); }}><Plus className="w-4 h-4 mr-2" />Catat Penjualan</Button>}
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {[{ label: "Transaksi", value: String(list.length), color: "text-slate-900" }, { label: "Volume Diterima (Kg)", value: num(totalVol), color: "text-blue-700" }, { label: "Total Revenue", value: fmtRp(totalRevenue), color: "text-emerald-700" }].map((s) => (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[{ label: "Transaksi", value: String(list.length), color: "text-slate-900" }, { label: "Volume Diterima (Kg)", value: num(totalVol), color: "text-blue-700" }, { label: "Fee ke Pembeli", value: fmtRp(totalFee), color: "text-teal-700" }, { label: "Total Revenue (barang + fee)", value: fmtRp(totalRevenue), color: "text-emerald-700" }].map((s) => (
           <Card key={s.label} className="p-5"><p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">{s.label}</p><p className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</p></Card>
         ))}
       </div>
@@ -538,8 +539,8 @@ export default function Selling() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-slate-50 border-b border-slate-100">
-              {["Tanggal", "Invoice / Batch", "Komoditas", "Offtaker", "Grade (kg)", "Kirim", "Diterima", "Ditolak", "Harga/Kg", "Revenue", "Biaya", ""].map((h) => (
-                <th key={h} className={`${["Kirim", "Diterima", "Ditolak", "Harga/Kg", "Revenue", "Biaya"].includes(h) ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
+              {["Tanggal", "Invoice / Batch", "Komoditas", "Offtaker", "Grade (kg)", "Kirim", "Diterima", "Ditolak", "Harga/Kg", "Nilai Barang", "Fee", "Revenue", "Biaya", ""].map((h) => (
+                <th key={h} className={`${["Kirim", "Diterima", "Ditolak", "Harga/Kg", "Nilai Barang", "Fee", "Revenue", "Biaya"].includes(h) ? "text-right" : "text-left"} py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -557,7 +558,9 @@ export default function Selling() {
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{num(r.accepted_volume)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-red-500">{num(r.rejected_volume)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-600" title={r.grade_summary ? "Rata-rata semua grade" : ""}>{fmtRp(r.price_per_unit)}</td>
-                  <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-emerald-700" title={Number(r.fee_total || 0) ? `termasuk fee ${fmtRp(r.fee_total!)}` : ""}>{fmtRp(r.total_revenue)}</td>
+                  <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{fmtRp(Number(r.total_revenue || 0) - Number(r.fee_total || 0))}</td>
+                  <td className="py-3 px-4 text-right text-sm font-mono text-teal-700">{Number(r.fee_total || 0) ? fmtRp(r.fee_total!) : "—"}</td>
+                  <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-emerald-700">{fmtRp(r.total_revenue)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-amber-700">{Number(r.total_cost || 0) ? fmtRp(r.total_cost!) : "—"}</td>
                   <td className="py-3 px-4"><div className="flex items-center justify-end gap-1">
                     <Button size="sm" variant="ghost" title="Lihat invoice" onClick={() => setViewId(r.id)}><FileText className="w-4 h-4" /></Button>
