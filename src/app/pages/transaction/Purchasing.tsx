@@ -39,7 +39,7 @@ interface PurchasingRow {
   // Loan repayment deducted from this delivery (pre-finance) and what was left
   // for the farmer — computed by the API.
   repayment_total: number;
-  net_payment: number;
+  net_payment: number;   // = total_value: a Pre-Finance price is already net of the deduction
   // A deduction typed by hand that differs from the rate, and why.
   repayment_manual?: number;
   repayment_reason?: string | null;
@@ -83,7 +83,10 @@ interface RepayPreview {
 
 // A starting Rp/kg per grade (GET purchasing/price-hints): the Pre-Finance rate's
 // final price, else the last price paid for that grade.
-interface PriceHint { grade_id: number | null; grade_name: string | null; price: number; source: "tarif" | "terakhir"; date: string; same_supplier?: boolean; }
+// A Pre-Finance price is the final price: full price − deduction per kg. The
+// 'tarif' hint carries the full price so the final price can follow a deduction
+// per kg typed on the form.
+interface PriceHint { grade_id: number | null; grade_name: string | null; price: number; source: "tarif" | "terakhir"; date: string; same_supplier?: boolean; full_price?: number; deduction_per_kg?: number; }
 /** One grade of the delivery. `auto`: the price still follows the hint (nobody typed it). */
 interface GradeLine { key: number; grade_id: string; quantity: string; price: string; auto: boolean; }
 
@@ -207,14 +210,6 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     return () => clearTimeout(t);
   }, [commodityId, supplierKey, supplierType, plotId, collectorId, date, isPS]);
   const hintFor = (g: string) => hints.find((h) => String(h.grade_id ?? "") === g);
-  // Lines nobody has typed a price into follow the hint for their grade.
-  useEffect(() => {
-    setLines((ls) => ls.map((l) => {
-      if (!l.auto) return l;
-      const h = hints.find((x) => String(x.grade_id ?? "") === l.grade_id);
-      return { ...l, price: h ? String(h.price) : "" };
-    }));
-  }, [hints]);
   function chooseGrade(i: number, g: string) {
     const l = lines[i];
     const h = hintFor(g);
@@ -313,6 +308,46 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   function setRepay(typeId: number, by: "kg" | "rp", v: number) {
     setOvr({ ...(ovr || {}), [typeId]: { by, v } });
   }
+
+  // The deduction per kg a line ends up with when someone typed it (null: the rate's).
+  const typedDeduct = (l: GradeLine): number | null => {
+    if (!isPF) return null;
+    if (multi) {
+      const p = multiPreview.find((x) => x.key === l.key)?.p;
+      if (!multiManual || !p?.applies) return null;
+      return r2(p.lines.reduce((s, t) => s + (kgTyped(t.pre_finance_type_id) ?? t.per_kg), 0));
+    }
+    if (!manual || !preview?.applies) return null;
+    return r2(preview.lines.reduce((s, t) => {
+      const o = ovr?.[t.pre_finance_type_id];
+      return s + (!o ? t.per_kg : o.by === "kg" ? o.v : qtyNum > 0 ? o.v / qtyNum : 0);
+    }, 0));
+  };
+  // The price a line nobody typed into should have: its hint — and on a
+  // Pre-Finance rate with a full price, full price − the deduction per kg, so a
+  // larger deduction leaves the farmer a lower cash price and the harvest value
+  // stays the same.
+  const autoPrice = (l: GradeLine): number | null => {
+    const h = hintFor(l.grade_id);
+    if (!h) return null;
+    const d = h.source === "tarif" && h.full_price != null ? typedDeduct(l) : null;
+    return d != null ? r2(h.full_price! - d) : h.price;
+  };
+  const autoKey = lines.map((l) => `${l.key}:${l.grade_id}:${l.auto ? autoPrice(l) : "-"}`).join("|");
+  useEffect(() => {
+    setLines((ls) => {
+      let changed = false;
+      const out = ls.map((l) => {
+        if (!l.auto) return l;
+        const p = autoPrice(l);
+        const s = p == null ? "" : String(p);
+        if (s === l.price) return l;
+        changed = true;
+        return { ...l, price: s };
+      });
+      return changed ? out : ls;
+    });
+  }, [hints, autoKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectCls = "w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-slate-50";
 
@@ -472,7 +507,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
           <div>
             <div className="flex items-end justify-between mb-1.5">
               <div>
-                <Label className="text-xs text-slate-600 block">Grade, Kuantitas & Harga / Kg{isPF ? " (harga penuh, sebelum potongan)" : ""} *</Label>
+                <Label className="text-xs text-slate-600 block">Grade, Kuantitas & Harga / Kg{isPF ? " (harga final, setelah potongan)" : ""} *</Label>
                 {!isPS && <p className="text-[11px] text-slate-400 mt-0.5">Harga terisi otomatis dari tarif / harga terakhir — ubah bila nota berbeda.</p>}
               </div>
               {!isEdit && (
@@ -498,14 +533,19 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
                     <div>
                       <Input type="number" value={isPS ? "0" : l.price} disabled={isPS} placeholder="0" className="text-right"
                         onChange={(e) => setLine(i, { price: e.target.value, auto: false })} />
-                      {!isPS && h && (
-                        Number(l.price) === Number(h.price)
-                          ? <p className="text-[10px] text-slate-400 mt-0.5 text-right">{h.source === "tarif" ? "dari tarif plot" : `harga terakhir ${String(h.date).slice(0, 10)}`}</p>
-                          : <button type="button" onClick={() => setLine(i, { price: String(h.price), auto: true })}
+                      {!isPS && h && (() => {
+                        const ap = autoPrice(l) ?? h.price;
+                        const fromTarif = h.source === "tarif" && h.full_price != null;
+                        return Number(l.price) === Number(ap)
+                          ? <p className="text-[10px] text-slate-400 mt-0.5 text-right">
+                              {fromTarif ? `penuh ${fmtRp(h.full_price!)} − potongan ${fmtRp(r2(h.full_price! - ap))}/kg`
+                                : h.source === "tarif" ? "dari tarif plot" : `harga terakhir ${String(h.date).slice(0, 10)}`}
+                            </p>
+                          : <button type="button" onClick={() => setLine(i, { price: String(ap), auto: true })}
                               className="block ml-auto text-[10px] text-amber-700 hover:underline mt-0.5">
-                              {h.source === "tarif" ? "tarif" : "terakhir"} {fmtRp(h.price)} — pakai
-                            </button>
-                      )}
+                              {h.source === "tarif" ? "tarif" : "terakhir"} {fmtRp(ap)} — pakai
+                            </button>;
+                      })()}
                     </div>
                     <span className="text-sm font-mono text-slate-700 text-right pt-2">{fmtRp(lineTotal(l))}</span>
                     {multi
@@ -677,22 +717,24 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
           </div>
 
           <div className="px-4 py-3 rounded-xl bg-slate-900 text-white space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Total Pembelian</span>
-              <span className="text-lg font-bold tabular-nums">{fmtRp(total)}</span>
-            </div>
+            {/* Pre-Finance: the price is already net of the deduction, so the total
+                is what the farmer is paid; the deduction comes on top of it. */}
             {isPF && repayTotal > 0 && (
               <>
+                <div className="flex items-center justify-between text-sm text-slate-300">
+                  <span>Nilai panen (harga penuh)</span>
+                  <span className="tabular-nums">{fmtRp(total + repayTotal)}</span>
+                </div>
                 <div className="flex items-center justify-between text-sm text-slate-300">
                   <span>Potongan cicilan</span>
                   <span className="tabular-nums">− {fmtRp(repayTotal)}</span>
                 </div>
-                <div className="flex items-center justify-between border-t border-white/20 pt-1">
-                  <span className="text-sm font-medium">Dibayar ke petani</span>
-                  <span className="text-lg font-bold tabular-nums">{fmtRp(total - repayTotal)}</span>
-                </div>
               </>
             )}
+            <div className={`flex items-center justify-between ${isPF && repayTotal > 0 ? "border-t border-white/20 pt-1" : ""}`}>
+              <span className="text-sm font-medium">{isPF && repayTotal > 0 ? "Total Pembelian (dibayar ke petani)" : "Total Pembelian"}</span>
+              <span className="text-lg font-bold tabular-nums">{fmtRp(total)}</span>
+            </div>
           </div>
         </div>
 
@@ -822,7 +864,7 @@ export default function Purchasing() {
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-700">{Number(r.quantity).toLocaleString("id-ID")}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono text-slate-600">{fmtRp(r.price_per_unit)}</td>
                   <td className="py-3 px-4 text-right text-sm font-mono font-semibold text-slate-900">{fmtRp(r.total_value)}</td>
-                  <td className="py-3 px-4 text-right text-sm font-mono text-amber-700" title={Number(r.repayment_total) > 0 ? `Dibayar ke petani: ${fmtRp(r.net_payment)}` : undefined}>
+                  <td className="py-3 px-4 text-right text-sm font-mono text-amber-700" title={Number(r.repayment_total) > 0 ? `Potongan ${fmtRp(r.repayment_total / (Number(r.quantity) || 1))}/kg · nilai panen harga penuh ${fmtRp(Number(r.total_value) + Number(r.repayment_total))}` : undefined}>
                     {Number(r.repayment_total) > 0 ? fmtRp(r.repayment_total) : "—"}
                     {Number(r.repayment_manual) === 1 && (
                       <span className="block text-[10px] font-sans font-semibold uppercase tracking-wide text-slate-500" title={r.repayment_reason || undefined}>manual</span>
