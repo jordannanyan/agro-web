@@ -107,11 +107,18 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   // A nota often holds several grades, each bought at its own Rp/kg: one line per
   // grade, saved as one purchase each under the same nota number. An edit is one
   // purchase, so one line.
+  // On a Pre-Finance delivery the price typed is the FULL price (AML `Full
+  // Purchase Price`, 2.850); the row keeps the final price (2.850 − deduction/kg),
+  // which the API works out from the deduction it books. An edit opens on the
+  // full price: the stored final price + the deduction per kg.
+  const editFull = editRow && editRow.scheme === "PreFinance" && Number(editRow.quantity) > 0
+    ? r2(Number(editRow.price_per_unit) + Number(editRow.repayment_total || 0) / Number(editRow.quantity))
+    : editRow?.price_per_unit;
   const [lines, setLines] = useState<GradeLine[]>([{
     key: 0,
     grade_id: editRow?.grade?.id ? String(editRow.grade.id) : "",
     quantity: editRow?.quantity != null ? String(editRow.quantity) : "",
-    price: editRow?.price_per_unit != null ? String(editRow.price_per_unit) : "",
+    price: editFull != null ? String(editFull) : "",
     auto: !editRow,
   }]);
   const multi = lines.length > 1;
@@ -191,10 +198,8 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
   const scheme: Scheme = supplierType === "collector" ? "BeliPutus"
     : keepsOwn ? (editRow!.scheme as Scheme) : (selectedPlot?.scheme ?? "BeliPutus");
   const isPS = scheme === "ProfitSharing";
-  const lineTotal = (l: GradeLine) => (parseFloat(l.quantity) || 0) * (isPS ? 0 : (parseFloat(l.price) || 0));
-  const total = lines.reduce((s, l) => s + lineTotal(l), 0);
-  const totalKg = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0);
   const isPF = scheme === "PreFinance";
+  const totalKg = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0);
 
   // ── Rp/kg per grade: filled in from the rate or the last price, then adjustable.
   const [hints, setHints] = useState<PriceHint[]>([]);
@@ -309,29 +314,30 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     setOvr({ ...(ovr || {}), [typeId]: { by, v } });
   }
 
-  // The deduction per kg a line ends up with when someone typed it (null: the rate's).
-  const typedDeduct = (l: GradeLine): number | null => {
-    if (!isPF) return null;
-    if (multi) {
-      const p = multiPreview.find((x) => x.key === l.key)?.p;
-      if (!multiManual || !p?.applies) return null;
-      return r2(p.lines.reduce((s, t) => s + (kgTyped(t.pre_finance_type_id) ?? t.per_kg), 0));
-    }
-    if (!manual || !preview?.applies) return null;
-    return r2(preview.lines.reduce((s, t) => {
-      const o = ovr?.[t.pre_finance_type_id];
-      return s + (!o ? t.per_kg : o.by === "kg" ? o.v : qtyNum > 0 ? o.v / qtyNum : 0);
-    }, 0));
+  // The deduction per kg this line books (after the debt cap), as the API will.
+  const dedPerKg = (l: GradeLine): number => {
+    if (!isPF) return 0;
+    const kg = Number(l.quantity) || 0;
+    if (!(kg > 0)) return 0;
+    const amt = multi ? (multiEst.find((x) => x.key === l.key)?.total ?? 0) : repayTotal;
+    return amt / kg;
   };
-  // The price a line nobody typed into should have: its hint — and on a
-  // Pre-Finance rate with a full price, full price − the deduction per kg, so a
-  // larger deduction leaves the farmer a lower cash price and the harvest value
-  // stays the same.
+  // Pre-Finance: the price typed is the full price; the final price (what the row
+  // keeps and the farmer is paid per kg) is full − deduction per kg.
+  const finalPrice = (l: GradeLine) => {
+    const p = parseFloat(l.price) || 0;
+    return isPS ? 0 : isPF ? r2(p - dedPerKg(l)) : p;
+  };
+  const lineTotal = (l: GradeLine) => (parseFloat(l.quantity) || 0) * finalPrice(l);
+  const total = lines.reduce((s, l) => s + lineTotal(l), 0);
+  const fullTotal = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (isPS ? 0 : (parseFloat(l.price) || 0)), 0);
+  // The price a line nobody typed into should have: its hint — on Pre-Finance the
+  // full price (the rate's, else the last final price + this deduction per kg).
   const autoPrice = (l: GradeLine): number | null => {
     const h = hintFor(l.grade_id);
     if (!h) return null;
-    const d = h.source === "tarif" && h.full_price != null ? typedDeduct(l) : null;
-    return d != null ? r2(h.full_price! - d) : h.price;
+    if (!isPF) return h.price;
+    return h.full_price != null ? h.full_price : r2(h.price + dedPerKg(l));
   };
   const autoKey = lines.map((l) => `${l.key}:${l.grade_id}:${l.auto ? autoPrice(l) : "-"}`).join("|");
   useEffect(() => {
@@ -358,6 +364,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     if (supplierType === "farmer" && !plotId) { toast.error("Pilih plot petani"); return; }
     if (supplierType === "collector" && !collectorId) { toast.error("Pilih collector"); return; }
     if (isPF && repayOver) { toast.error("Potongan cicilan melebihi sisa utang petani"); return; }
+    if (isPF && lines.some((l) => finalPrice(l) < 0)) { toast.error("Potongan per kg lebih besar dari harga penuh — periksa harga penuhnya"); return; }
     if (isPF && (multi ? multiDiffers : repayDiffers) && !reason.trim()) { toast.error("Potongan berbeda dari tarif — isi alasannya"); return; }
     const payload: any = {
       supplier_type: supplierType,
@@ -366,7 +373,8 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
       warehouse_id: warehouseId ? Number(warehouseId) : null,
       date,
       quantity: Number(quantity),
-      price_per_unit: isPS ? 0 : (Number(lines[0].price) || 0),
+      price_per_unit: finalPrice(lines[0]),
+      ...(isPF ? { full_price_per_unit: Number(lines[0].price) || 0 } : {}),
       receipt_invoice: invoice || null,
       payment_status: paid,
     };
@@ -374,7 +382,8 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
     else payload.collector_id = Number(collectorId);
     if (multi) {
       payload.lines = lines.map((l) => ({
-        grade_id: l.grade_id ? Number(l.grade_id) : null, quantity: Number(l.quantity), price_per_unit: isPS ? 0 : (Number(l.price) || 0),
+        grade_id: l.grade_id ? Number(l.grade_id) : null, quantity: Number(l.quantity), price_per_unit: finalPrice(l),
+        ...(isPF ? { full_price_per_unit: Number(l.price) || 0 } : {}),
       }));
       if (isPF && multiManual) {
         payload.repayment_per_kg = multiTypes
@@ -507,8 +516,11 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
           <div>
             <div className="flex items-end justify-between mb-1.5">
               <div>
-                <Label className="text-xs text-slate-600 block">Grade, Kuantitas & Harga / Kg{isPF ? " (harga final, setelah potongan)" : ""} *</Label>
-                {!isPS && <p className="text-[11px] text-slate-400 mt-0.5">Harga terisi otomatis dari tarif / harga terakhir — ubah bila nota berbeda.</p>}
+                <Label className="text-xs text-slate-600 block">Grade, Kuantitas & Harga {isPF ? "Penuh " : ""}/ Kg{isPF ? " (sebelum potongan)" : ""} *</Label>
+                {!isPS && <p className="text-[11px] text-slate-400 mt-0.5">
+                  {isPF ? "Isi harga penuh (mis. 2.850). Harga akhir = harga penuh − potongan/kg, dihitung otomatis dan itu yang disimpan."
+                    : "Harga terisi otomatis dari tarif / harga terakhir — ubah bila nota berbeda."}
+                </p>}
               </div>
               {!isEdit && (
                 <button type="button" onClick={addLine} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline">
@@ -518,7 +530,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
             </div>
             <div className="rounded-xl border border-slate-200 overflow-hidden">
               <div className="grid grid-cols-[1.1fr_1fr_1.3fr_1.1fr_32px] gap-2 px-3 py-2 bg-slate-50 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                <span>Grade</span><span className="text-right">Kg</span><span className="text-right">Harga / Kg</span><span className="text-right">Subtotal</span><span />
+                <span>Grade</span><span className="text-right">Kg</span><span className="text-right">{isPF ? "Harga penuh / Kg" : "Harga / Kg"}</span><span className="text-right">{isPF ? "Dibayar" : "Subtotal"}</span><span />
               </div>
               {lines.map((l, i) => {
                 const h = hintFor(l.grade_id);
@@ -533,13 +545,16 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
                     <div>
                       <Input type="number" value={isPS ? "0" : l.price} disabled={isPS} placeholder="0" className="text-right"
                         onChange={(e) => setLine(i, { price: e.target.value, auto: false })} />
+                      {isPF && Number(l.price) > 0 && (
+                        <p className={`text-[10px] mt-0.5 text-right ${finalPrice(l) < 0 ? "text-red-600" : "text-slate-500"}`}>
+                          harga akhir <b>{fmtRp(finalPrice(l))}</b>{dedPerKg(l) > 0 ? ` (− potongan ${fmtRp(r2(dedPerKg(l)))}/kg)` : ""}
+                        </p>
+                      )}
                       {!isPS && h && (() => {
                         const ap = autoPrice(l) ?? h.price;
-                        const fromTarif = h.source === "tarif" && h.full_price != null;
                         return Number(l.price) === Number(ap)
                           ? <p className="text-[10px] text-slate-400 mt-0.5 text-right">
-                              {fromTarif ? `penuh ${fmtRp(h.full_price!)} − potongan ${fmtRp(r2(h.full_price! - ap))}/kg`
-                                : h.source === "tarif" ? "dari tarif plot" : `harga terakhir ${String(h.date).slice(0, 10)}`}
+                              {h.source === "tarif" ? "dari tarif plot" : `harga terakhir ${String(h.date).slice(0, 10)}`}
                             </p>
                           : <button type="button" onClick={() => setLine(i, { price: String(ap), auto: true })}
                               className="block ml-auto text-[10px] text-amber-700 hover:underline mt-0.5">
@@ -723,7 +738,7 @@ function PurchasingModal({ onClose, onSaved, plots, commodities, grades, collect
               <>
                 <div className="flex items-center justify-between text-sm text-slate-300">
                   <span>Nilai panen (harga penuh)</span>
-                  <span className="tabular-nums">{fmtRp(total + repayTotal)}</span>
+                  <span className="tabular-nums">{fmtRp(Math.round(fullTotal * 100) / 100)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm text-slate-300">
                   <span>Potongan cicilan</span>
