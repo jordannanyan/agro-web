@@ -11,6 +11,7 @@ import { Card } from "../components/ui/card";
 import { useApi } from "../lib/hooks";
 import { useAuth } from "../store/AuthContext";
 import { isEntityBound } from "../lib/permissions";
+import { SegmentPanel } from "../components/dashboard/SegmentPanel";
 
 interface DashboardData {
   /** Which entity these figures cover; all_entities when the viewer sees every PT. */
@@ -141,6 +142,8 @@ export default function ExecutiveDashboard() {
           </Card>
         ))}
       </div>
+
+      <SegmentPanel entityId={bound ? "" : entityId} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Trend chart */}
