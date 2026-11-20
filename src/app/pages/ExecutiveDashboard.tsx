@@ -76,7 +76,6 @@ export default function ExecutiveDashboard() {
     [data]
   );
   const schemeMax = Math.max(1, ...(data?.purchasing_by_scheme || []).map((s) => Number(s.value)));
-  const expenseMax = Math.max(1, ...(data?.expenses_by_code || []).map((e) => Number(e.value)));
 
   const kpiCards = [
     { label: "Nilai Pembelian", value: fmtRp(k?.purchasing_value ?? 0), icon: ShoppingCart, color: "text-blue-700", bg: "bg-blue-50" },
@@ -206,67 +205,6 @@ export default function ExecutiveDashboard() {
           </div>
         </Card>
       </div>
-
-      {/* Expenses — where the paid money went. Kept apart from the KPI card so the
-          total is never read without what it is made of. */}
-      <Card className="p-5">
-        <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
-          <div>
-            <h2 className="text-slate-900 font-semibold">Expenses — Payment Request Terbayar</h2>
-            <p className="text-xs text-slate-400">
-              Hanya PayReq berstatus <span className="font-semibold">Paid</span> — dicocokkan dari rekening koran, bukan yang baru disetujui
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xl font-bold font-mono text-rose-700">{fmtRp(k?.expenses_paid ?? 0)}</p>
-            <p className="text-xs text-slate-400">{k?.expenses_paid_count ?? 0} payment request</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-2">Per Jenis</p>
-            <div className="space-y-2">
-              {(data?.expenses_by_kind || []).map((e) => (
-                <div key={e.kind} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50">
-                  <span className="text-sm text-slate-700">
-                    {e.kind === "Reimbursement" ? "Reimbursement petani" : "Procurement"}
-                    <span className="text-xs text-slate-400"> · {e.count} dok</span>
-                  </span>
-                  <span className="text-sm font-mono font-semibold text-slate-800">{fmtRp(e.value)}</span>
-                </div>
-              ))}
-              {(!data?.expenses_by_kind || data.expenses_by_kind.length === 0) && (
-                <p className="text-sm text-slate-400 py-4 text-center">{loading ? "Memuat…" : "Belum ada pembayaran terbayar"}</p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-2">Per Project Code</p>
-            <div className="space-y-3">
-              {(data?.expenses_by_code || []).map((e) => (
-                <div key={e.code}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-mono text-slate-600">{e.code}</span>
-                    <span className="text-sm font-mono text-slate-600">{fmtRp(e.value)}</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-rose-400" style={{ width: `${(Number(e.value) / expenseMax) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
-              {(!data?.expenses_by_code || data.expenses_by_code.length === 0) && (
-                <p className="text-sm text-slate-400 py-4 text-center">{loading ? "Memuat…" : "Belum ada pembayaran terbayar"}</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <Link to="/procurement/payment-request" className="inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:underline mt-4">
-          Lihat semua payment request <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      </Card>
 
       {/* Secondary stats + actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
