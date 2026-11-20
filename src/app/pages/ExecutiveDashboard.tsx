@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   DollarSign, TrendingUp, Users, Sprout, ShoppingCart, Factory,
   AlertTriangle, ArrowRight, FileText, CreditCard, Building2, Wallet,
@@ -44,11 +44,26 @@ const SCHEME_META: Record<string, { label: string; cls: string; bar: string }> =
   ProfitSharing: { label: "Profit Sharing", cls: "text-emerald-700", bar: "bg-emerald-500" },
 };
 
+// Remembered per browser: an admin who reads JNBS every morning should not have
+// to pick it again. Storage can be unavailable (private window) — then it is "".
+const PT_KEY = "exec_dashboard_entity";
+const readPt = () => { try { return localStorage.getItem(PT_KEY) || ""; } catch { return ""; } };
+
 export default function ExecutiveDashboard() {
-  const { data, loading, error } = useApi<DashboardData>("dashboard/executive");
   const { user } = useAuth();
-  const k = data?.kpis;
   const bound = isEntityBound(user);
+  // Admins and cross-entity roles see every PT; they may narrow the whole page to
+  // one. The API applies ?entity_id only for them — an entity-bound account stays
+  // on its own PT whatever is sent.
+  const [entityId, setEntityIdState] = useState(bound ? "" : readPt());
+  const setEntityId = (v: string) => { setEntityIdState(v); try { localStorage.setItem(PT_KEY, v); } catch { /* ignore */ } };
+  const { data: entities } = useApi<any[]>(bound ? null : "entities");
+  const pts = (entities || []).filter((e) => String(e.entity_type || "").toLowerCase() === "operational");
+  const ptShort = (n: string) => n.match(/\(([^)]+)\)/)?.[1] ?? n;
+  const chosen = pts.find((e) => String(e.id) === entityId);
+  const { data, loading, error } = useApi<DashboardData>("dashboard/executive",
+    entityId && !bound ? { entity_id: entityId } : undefined, [entityId]);
+  const k = data?.kpis;
 
   const trend = useMemo(
     () => (data?.trend || []).map((t) => ({
@@ -89,13 +104,25 @@ export default function ExecutiveDashboard() {
         <h1 className="text-2xl text-slate-900 mb-1">Executive Dashboard</h1>
         <p className="text-sm text-slate-500">Ringkasan operasional lintas modul — data real-time</p>
         {/* The figures are entity-scoped, so the page says whose they are. */}
-        <span className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-lg text-xs font-semibold border ${
-          bound ? "bg-slate-50 text-slate-600 border-slate-200" : "bg-indigo-50 text-indigo-700 border-indigo-200"}`}>
-          <Building2 className="w-3.5 h-3.5" />
-          {bound
-            ? `Data ${user?.entity?.entities_name || `Entity #${user?.entity_id}`}`
-            : "Gabungan semua entitas"}
-        </span>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+            bound || chosen ? "bg-slate-50 text-slate-600 border-slate-200" : "bg-indigo-50 text-indigo-700 border-indigo-200"}`}>
+            <Building2 className="w-3.5 h-3.5" />
+            {bound
+              ? `Data ${user?.entity?.entities_name || `Entity #${user?.entity_id}`}`
+              : chosen ? `Data ${chosen.entities_name}` : "Gabungan semua entitas"}
+          </span>
+          {!bound && pts.length > 0 && (
+            <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
+              {[{ id: "", label: "Semua PT" }, ...pts.map((e) => ({ id: String(e.id), label: ptShort(e.entities_name) }))].map((o) => (
+                <button key={o.id || "all"} onClick={() => setEntityId(o.id)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${entityId === o.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>}
