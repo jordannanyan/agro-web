@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   DollarSign, TrendingUp, Users, Sprout, ShoppingCart, Factory,
-  AlertTriangle, ArrowRight, FileText, CreditCard, Building2, Wallet,
+  AlertTriangle, ArrowRight, FileText, CreditCard, Building2,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -71,7 +71,6 @@ export default function ExecutiveDashboard() {
       period: t.period,
       Pembelian: Number(t.purchasing_value || 0),
       Penjualan: Number(t.selling_revenue || 0),
-      Pengeluaran: Number(t.expenses_paid || 0),
     })),
     [data]
   );
@@ -80,9 +79,6 @@ export default function ExecutiveDashboard() {
   const kpiCards = [
     { label: "Nilai Pembelian", value: fmtRp(k?.purchasing_value ?? 0), icon: ShoppingCart, color: "text-blue-700", bg: "bg-blue-50" },
     { label: "Revenue Penjualan", value: fmtRp(k?.selling_revenue ?? 0), icon: TrendingUp, color: "text-emerald-700", bg: "bg-emerald-50" },
-    // Spend, not commitment: a payment request only turns 'Paid' when the bank
-    // statement says the transfer happened.
-    { label: "Expenses (Terbayar)", value: fmtRp(k?.expenses_paid ?? 0), icon: Wallet, color: "text-rose-700", bg: "bg-rose-50" },
     { label: "Outstanding Petani", value: fmtRp(k?.outstanding_total ?? 0), icon: DollarSign, color: "text-amber-700", bg: "bg-amber-50" },
     { label: "Volume Beli (Kg)", value: Number(k?.purchasing_qty ?? 0).toLocaleString("id-ID"), icon: Sprout, color: "text-violet-700", bg: "bg-violet-50" },
   ];
@@ -128,7 +124,7 @@ export default function ExecutiveDashboard() {
       {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {kpiCards.map((c) => (
           <Card key={c.label} className="p-5">
             <div className="flex items-center justify-between mb-3">
@@ -149,7 +145,7 @@ export default function ExecutiveDashboard() {
         <Card className="lg:col-span-2 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-slate-900 font-semibold">Tren Pembelian, Penjualan & Pengeluaran</h2>
+              <h2 className="text-slate-900 font-semibold">Tren Pembelian & Penjualan</h2>
               <p className="text-xs text-slate-400">6 periode terakhir</p>
             </div>
           </div>
@@ -162,7 +158,6 @@ export default function ExecutiveDashboard() {
                   <defs>
                     <linearGradient id="gPur" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} /></linearGradient>
                     <linearGradient id="gSel" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
-                    <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} /><stop offset="95%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="period" tick={{ fontSize: 12, fill: "#94a3b8" }} />
@@ -171,8 +166,6 @@ export default function ExecutiveDashboard() {
                   <Legend />
                   <Area type="monotone" dataKey="Pembelian" stroke="#3b82f6" fill="url(#gPur)" strokeWidth={2} />
                   <Area type="monotone" dataKey="Penjualan" stroke="#10b981" fill="url(#gSel)" strokeWidth={2} />
-                  {/* Booked on the date the money left the account (released_pay_date). */}
-                  <Area type="monotone" dataKey="Pengeluaran" stroke="#f43f5e" fill="url(#gExp)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
             )}
