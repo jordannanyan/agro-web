@@ -100,8 +100,15 @@ export function SegmentPanel({ entityId }: { entityId: string }) {
                 <button key={keyOf(s)} onClick={() => choose(keyOf(s))}
                   className={`px-3 py-2 rounded-xl border text-left transition-colors ${on ? "border-emerald-300 bg-emerald-50" : "border-slate-200 hover:border-slate-300 bg-white"}`}>
                   <span className="block text-sm font-semibold text-slate-800">{ptShort(s.entity_name)} · {crop(s.commodity_name)}</span>
-                  <span className="block text-[11px] text-slate-500 tabular-nums">
-                    {s.totals.sales > 0 ? `jual ${fmtShort(s.totals.sales)}` : "belum ada penjualan"}
+                  {/* The three bars of the chart, in their colours, so segments can be
+                      compared without opening each one. */}
+                  <span className="flex flex-wrap gap-x-2.5 gap-y-0.5 mt-0.5 text-[11px] text-slate-600 tabular-nums">
+                    {([["sales", "penjualan"], ["direct", "direct cost"], ["indirect", "bukan direct cost"]] as const).map(([k, l]) => (
+                      <span key={k} className="inline-flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-sm" style={{ background: C[k] }} />
+                        {l} {s.totals[k] ? fmtShort(s.totals[k]) : "—"}
+                      </span>
+                    ))}
                   </span>
                 </button>
               );
